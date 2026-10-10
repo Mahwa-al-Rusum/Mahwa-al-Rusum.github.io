@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 </head>
 <body>
-<title>Fawāʾid</title>
+<title>Maḥw al-Rusūm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
@@ -46,6 +46,7 @@ main { max-width: 46rem; margin: 0 auto; padding-inline: 16px; padding-block: 40
 .kicker { font-family: var(--sans); font-size: 12.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
 .intro h1 { font-size: 34px; line-height: 1.2; font-weight: 600; margin: 0 0 8px; text-wrap: balance; }
 .intro p { color: var(--ink-muted); margin: 0; }
+.intro .ar-title { font-size: 24px; line-height: 1.8; text-align: left; margin: -4px 0 10px; }
 
 .search { margin-top: 28px; display: flex; flex-direction: column; gap: 6px; }
 .search label { font-family: var(--sans); font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
@@ -92,12 +93,12 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 16px; padding-block: 
 </style>
 
 <div class="top"><div class="top-in">
-  <a class="brand" href="#home">Fawāʾid <span class="ar" lang="ar" dir="rtl">فوائد</span></a>
+  <a class="brand" href="#home">Maḥw al-Rusūm <span class="ar" lang="ar" dir="rtl">محو الرسوم</span></a>
   <nav><a href="#home">All articles</a></nav>
 </div></div>
 
 <main id="view"></main>
-<footer>Fawāʾid · Articles on the Qur'an, the Sunnah and the scholars.</footer>
+<footer>Maḥw al-Rusūm · Articles on the Qur'an, the Sunnah and the scholars.</footer>
 
 <script>
 const POSTS = [];
@@ -108,12 +109,13 @@ const dirAttr = p => p.rtl ? ' lang="ar" dir="rtl"' : "";
 let query = "";
 
 function home() {
-  document.title = "Fawāʾid";
+  document.title = "Maḥw al-Rusūm";
   const n = POSTS.length;
   view.innerHTML = `
     <section class="intro">
       <p class="kicker">${n ? n + (n === 1 ? " article" : " articles") : "New site"}</p>
-      <h1>Fawāʾid</h1>
+      <h1>Maḥw al-Rusūm</h1>
+      <p class="ar-title" lang="ar" dir="rtl">محو الرسوم</p>
       <p>Short articles and notes, newest first.</p>
     </section>
     ${n ? `<div class="search"><label for="q">Search the articles</label>
@@ -139,7 +141,7 @@ function renderList() {
 
 function article(i) {
   const p = POSTS[i], newer = POSTS[i - 1], older = POSTS[i + 1];
-  document.title = p.title + " · Fawāʾid";
+  document.title = p.title + " · Maḥw al-Rusūm";
   view.innerHTML = `
     <a class="back" href="#home">← All articles</a>
     <article${dirAttr(p)}>
