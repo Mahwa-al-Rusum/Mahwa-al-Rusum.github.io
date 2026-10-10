@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin · Maḥw al-Rusūm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
+<style>
+/* Layout: one working column (56rem) under the site's header; three views: sign in, article list, editor. Scholarly Press tokens. */
+:root {
+  --paper: #f4f5f1; --surface: #ffffff; --sunk: #eceee8; --ink: #1c2220; --ink-muted: #5d6661;
+  --rule: #d5d9d2; --accent: #1e6b5c; --on-accent: #ffffff; --accent-soft: #dcebe6; --quote-bg: #f7f8f4;
+  --ok: #1e6b3a; --ok-bg: #e2f0e6; --warn: #8a5a00; --warn-bg: #f7ecd4; --bad: #a3322a; --bad-bg: #f8e3e0;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --arabic: "Noto Naskh Arabic", "Geeza Pro", "Traditional Arabic", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141817; --surface: #1b201e; --sunk: #171c1a; --ink: #e3e8e5; --ink-muted: #9aa5a0;
+    --rule: #2e3633; --accent: #6cc2ad; --on-accent: #10201b; --accent-soft: #20352f; --quote-bg: #1f2522;
+    --ok: #7fd19b; --ok-bg: #1d3325; --warn: #e2b45c; --warn-bg: #3a2f17; --bad: #f08c80; --bad-bg: #3d211e;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+[hidden] { display: none !important; }
+[lang="ar"], .ar { font-family: var(--arabic); }
+
+.top { position: sticky; top: 0; z-index: 3; background: var(--surface); border-bottom: 1px solid var(--rule); }
+.top-in { max-width: 56rem; margin: 0 auto; padding-inline: 16px; height: 58px; display: flex; align-items: center; gap: 12px; }
+.brand { font-weight: 600; font-size: 17px; color: var(--ink); text-decoration: none; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tag { font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 6px; }
+.top-in .spacer { flex: 1; }
+.top-in nav { display: flex; gap: 14px; font-size: 14px; white-space: nowrap; }
+.linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+main { max-width: 56rem; margin: 0 auto; padding-inline: 16px; padding-block: 32px 72px; }
+h1 { font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 1.2; margin: 0 0 8px; text-wrap: balance; }
+.lead { color: var(--ink-muted); margin: 0 0 24px; max-width: 42rem; }
+.kicker { font-size: 12.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 22px; }
+.field { display: grid; gap: 6px; }
+.field > label, .label { font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
+.hint { font-size: 13px; color: var(--ink-muted); }
+input[type=text], input[type=password], input[type=date], textarea {
+  font: 16px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 10px 12px; width: 100%; min-width: 0;
+}
+textarea { resize: vertical; }
+.btn { font: 600 15px var(--sans); border-radius: 8px; padding: 10px 16px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); cursor: pointer; white-space: nowrap; }
+.btn.secondary { background: var(--surface); color: var(--accent); }
+.btn.danger { background: var(--surface); color: var(--bad); border-color: var(--bad); }
+.btn.danger.solid { background: var(--bad); color: var(--surface); }
+.btn:disabled { opacity: .55; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+.msg { border-radius: 8px; padding: 10px 14px; margin: 0 0 18px; font-size: 14.5px; }
+.msg.ok { background: var(--ok-bg); color: var(--ok); }
+.msg.bad { background: var(--bad-bg); color: var(--bad); }
+.msg.info { background: var(--accent-soft); color: var(--ink); }
+
+/* sign in */
+.steps { margin: 0 0 18px; padding-inline-start: 20px; display: grid; gap: 6px; }
+.signin { display: grid; gap: 18px; max-width: 34rem; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14.5px; }
+
+/* list */
+.list-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; margin-bottom: 18px; }
+.counts { font-size: 13.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.items { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
+.items li { border-bottom: 1px solid var(--rule); }
+.items button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 16px 4px; cursor: pointer; }
+.items button:hover .t, .items button:focus-visible .t { color: var(--accent); }
+.items button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.items .t { font-family: var(--serif); font-size: 20px; font-weight: 600; line-height: 1.3; min-width: 0; }
+.items .meta { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; grid-column: 1; }
+.items .pill { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.pill { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; border-radius: 3px; padding: 2px 8px; }
+.pill.pub { background: var(--ok-bg); color: var(--ok); }
+.pill.draft { background: var(--warn-bg); color: var(--warn); }
+.empty { padding: 28px 4px; color: var(--ink-muted); }
+
+/* editor */
+.ed-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.grid { display: grid; grid-template-columns: 1fr 12rem; gap: 16px; }
+.grid .wide { grid-column: 1 / -1; }
+.switch { display: flex; gap: 12px; align-items: center; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.track { flex: none; width: 44px; height: 24px; border-radius: 12px; background: var(--rule); position: relative; transition: background .15s; }
+.track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); transition: transform .15s; }
+.switch input:checked + .track { background: var(--ok); }
+.switch input:checked + .track::after { transform: translateX(20px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch .state { font-weight: 600; }
+.switch .state-hint { font-size: 13px; color: var(--ink-muted); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 0; }
+.tabs button { font: 600 14px var(--sans); background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--ink-muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0; }
+.toolbar button { font: 500 13.5px var(--sans); background: var(--sunk); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+#f-body { font-family: var(--serif); font-size: 18px; line-height: 1.7; min-height: 26rem; unicode-bidi: plaintext; }
+.preview { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 22px; min-height: 26rem; overflow-wrap: anywhere; }
+.preview .p-title { font-family: var(--serif); font-size: 30px; font-weight: 600; line-height: 1.2; margin: 0 0 16px; }
+.preview .body { font-family: var(--serif); font-size: 18px; line-height: 1.6; }
+.preview .body h2, .preview .body h3, .preview .body h4 { font-family: var(--serif); line-height: 1.3; margin: 28px 0 8px; }
+.preview .body blockquote { margin: 0 0 18px; padding: 12px 16px; background: var(--quote-bg); border-inline-start: 3px solid var(--accent); }
+.preview .body blockquote p { margin: 0; }
+.preview .body [dir="rtl"] { font-family: var(--arabic); font-size: 20px; line-height: 2; }
+.help { font-size: 13.5px; color: var(--ink-muted); margin-top: 10px; }
+.help code { font-size: 13px; background: var(--sunk); border-radius: 3px; padding: 0 4px; }
+.savebar { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--rule); padding-block: 12px; margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.savebar .spacer { flex: 1; }
+.confirm { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 8px; background: var(--bad-bg); color: var(--bad); font-size: 14.5px; }
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+  .top-in .tag { display: none; }
+  .top-in { gap: 8px; }
+  .top-in nav { gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .track, .track::after { transition: none; } }
+</style>
+</head>
+<body>
+<div class="top"><div class="top-in">
+  <a class="brand" href="../">Maḥw al-Rusūm</a><span class="tag">Admin</span>
+  <span class="spacer"></span>
+  <nav><a href="../" target="_blank" rel="noopener">Open site</a><button class="linkbtn" id="signout" type="button" hidden>Sign out</button></nav>
+</div></div>
+
+<main>
+  <!-- Sign in -->
+  <section id="v-signin" hidden>
+    <p class="kicker">Admin</p>
+    <h1>Sign in to edit your articles</h1>
+    <p class="lead">This page edits the articles kept in your private GitHub folder. Only someone holding your sign-in key can use it.</p>
+    <div id="signin-msg"></div>
+    <div class="signin panel">
+      <div>
+        <p class="label">First time on this device?</p>
+        <ol class="steps">
+          <li><a id="make-key" target="_blank" rel="noopener">Open GitHub's "new key" page</a> (you must be signed in to GitHub).</li>
+          <li>Under <b>Repository access</b>, choose <b>Only select repositories</b> and pick <b>site-content</b>.</li>
+          <li>Under <b>Permissions → Repository permissions</b>, set <b>Contents</b> to <b>Read and write</b>.</li>
+          <li>Click <b>Generate token</b>, copy the key, and paste it below.</li>
+        </ol>
+      </div>
+      <form id="signin-form" class="signin" novalidate>
+        <div class="field">
+          <label for="token">Sign-in key</label>
+          <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…">
+        </div>
+        <label class="check"><input id="remember" type="checkbox" checked> Keep me signed in on this device</label>
+        <div class="row"><button class="btn" type="submit" id="signin-btn">Sign in</button></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- List -->
+  <section id="v-list" hidden>
+    <div class="list-head">
+      <div>
+        <p class="kicker">Your articles</p>
+        <h1>Articles</h1>
+        <p class="counts" id="counts"></p>
+      </div>
+      <button class="btn" id="new-btn" type="button">New article</button>
+    </div>
+    <div id="list-msg"></div>
+    <ul class="items" id="items"></ul>
+  </section>
+
+  <!-- Editor -->
+  <section id="v-editor" hidden>
+    <div class="ed-top">
+      <button class="linkbtn" id="back-btn" type="button">← All articles</button>
+      <a id="view-link" target="_blank" rel="noopener" hidden>View on the site</a>
+    </div>
+    <div id="ed-msg"></div>
+    <div class="grid">
+      <div class="field wide">
+        <label for="f-title">Title</label>
+        <input id="f-title" type="text" dir="auto">
+      </div>
+      <div class="field wide">
+        <label for="f-summary">Summary <span class="hint">(optional, shown in the list)</span></label>
+        <input id="f-summary" type="text" dir="auto">
+      </div>
+      <label class="switch" for="f-published">
+        <input id="f-published" type="checkbox">
+        <span class="track" aria-hidden="true"></span>
+        <span><span class="state" id="pub-state">Hidden draft</span><br><span class="state-hint" id="pub-hint">Only you can see it.</span></span>
+      </label>
+      <div class="field">
+        <label for="f-date">Date</label>
+        <input id="f-date" type="date">
+      </div>
+      <div class="wide">
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" id="tab-write" aria-selected="true">Write</button>
+          <button type="button" role="tab" id="tab-preview" aria-selected="false">Preview</button>
+        </div>
+        <div id="pane-write">
+          <div class="toolbar" aria-label="Formatting">
+            <button type="button" data-fmt="h">Heading</button>
+            <button type="button" data-fmt="b"><b>Bold</b></button>
+            <button type="button" data-fmt="i"><i>Italic</i></button>
+            <button type="button" data-fmt="q">Quote</button>
+            <button type="button" data-fmt="l">List</button>
+            <button type="button" data-fmt="a">Link</button>
+          </div>
+          <label for="f-body" class="label" hidden>Article text</label>
+          <textarea id="f-body" dir="auto" spellcheck="true"></textarea>
+          <p class="help">Leave an empty line between paragraphs. <code># Heading</code> · <code>**bold**</code> · <code>*italic*</code> · <code>&gt; quotation</code> · <code>- list item</code> · <code>[text](https://link)</code>. Arabic paragraphs turn right-to-left by themselves.</p>
+        </div>
+        <div id="pane-preview" class="preview" hidden></div>
+      </div>
+    </div>
+    <div class="savebar">
+      <button class="btn" id="save-btn" type="button">Save</button>
+      <span class="hint" id="dirty-note"></span>
+      <span class="spacer"></span>
+      <button class="btn danger" id="del-btn" type="button">Delete</button>
+    </div>
+    <div id="confirm-slot"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const OWNER = "Mahwa-al-Rusum", REPO = "site-content", BRANCH = "main", DIR = "articles";
+const SITE = "https://mahwa-al-rusum.github.io/";
+const API = (() => { try { return localStorage.getItem("mr_api_base") || "https://api.github.com"; } catch (e) { return "https://api.github.com"; } })();
+const KEY_URL = "https://github.com/settings/personal-access-tokens/new?name=" + encodeURIComponent("Mahw al-Rusum admin") +
+  "&description=" + encodeURIComponent("Edit articles from the site's admin page") + "&target_name=" + OWNER + "&expires_in=365&contents=write";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+let token = "", articles = [], current = null, dirty = false;
+
+/* ---------- storage ---------- */
+function loadToken() {
+  for (const st of [() => sessionStorage, () => localStorage]) {
+    try { const t = st().getItem("mr_token"); if (t) return t; } catch (e) {}
+  }
+  return "";
+}
+function saveToken(t, remember) {
+  try { (remember ? localStorage : sessionStorage).setItem("mr_token", t); } catch (e) {}
+}
+function clearToken() {
+  for (const st of [() => sessionStorage, () => localStorage]) { try { st().removeItem("mr_token"); } catch (e) {} }
+}
+
+/* ---------- GitHub API ---------- */
+async function gh(path, opts = {}) {
+  const r = await fetch(API + path, {
+    ...opts, cache: "no-store",
+    headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", ...(opts.headers || {}) }
+  });
+  if (!r.ok) { const e = new Error("GitHub " + r.status); e.status = r.status; throw e; }
+  return r.status === 204 ? null : r.json();
+}
+const b64encode = s => { const b = new TextEncoder().encode(s); let bin = ""; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin); };
+const b64decode = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, "")), c => c.charCodeAt(0)));
+const repoPath = p => `/repos/${OWNER}/${REPO}/contents/${p.split("/").map(encodeURIComponent).join("/")}`;
+
+function explain(e, doing) {
+  if (e.status === 401 && doing === "signing in") return "That key was not accepted. It may be mistyped or expired. Make a new key and paste it here.";
+  if (e.status === 401) return "Your sign-in key is not valid or has expired. Sign out and sign in with a new key.";
+  if (e.status === 403) return "Your key can read but not save. Make a new key with Contents set to Read and write.";
+  if (e.status === 404) return "This key cannot see the site-content folder. When making the key, choose Only select repositories and pick site-content.";
+  if (e.status === 409 || e.status === 422) return "This article was changed somewhere else since you opened it. Copy your text, go back to the list, open it again, and paste your changes.";
+  if (!e.status) return `Could not reach GitHub while ${doing}. Check your internet connection and try again.`;
+  return `GitHub refused the request while ${doing} (error ${e.status}). Try again in a minute.`;
+}
+function show(slot, kind, text) { $(slot).innerHTML = text ? `<p class="msg ${kind}">${esc(text)}</p>` : ""; }
+
+/* ---------- article files ---------- */
+function parse(raw) {
+  raw = raw.replace(/\r\n/g, "\n");
+  let head = "", body = raw;
+  if (raw.startsWith("---\n")) { const i = raw.indexOf("\n---\n", 4); if (i >= 0) { head = raw.slice(4, i); body = raw.slice(i + 5); } }
+  else { const i = raw.indexOf("\n---\n"); if (i >= 0) { head = raw.slice(0, i); body = raw.slice(i + 5); } }
+  const meta = {};
+  head.split("\n").forEach(l => { const k = l.indexOf(":"); if (k > 0) meta[l.slice(0, k).trim().toLowerCase()] = l.slice(k + 1).trim(); });
+  return { title: meta.title || "", date: meta.date || "", summary: meta.summary || "",
+           published: ["true", "yes", "1"].includes((meta.published || "false").toLowerCase()), body };
+}
+function serialize(a) {
+  const one = s => String(s || "").replace(/\s*\n\s*/g, " ").trim();
+  return "---\ntitle: " + one(a.title) + "\ndate: " + one(a.date) + (one(a.summary) ? "\nsummary: " + one(a.summary) : "") +
+         "\npublished: " + (a.published ? "true" : "false") + "\n---\n" + a.body.replace(/\r\n/g, "\n").replace(/\s*$/, "\n");
+}
+function slugOf(name) { return name.replace(/\.md$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "article"; }
+function newFileName(title, date) {
+  let s = title.normalize("NFKD").replace(/[̀-ͯʼʾʿ‘’']/g, "").toLowerCase()
+               .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60).replace(/-+$/, "");
+  if (!s) s = "article-" + Date.now().toString(36);
+  let name = `${date}-${s}.md`, n = 2;
+  while (articles.some(a => a.name === name)) name = `${date}-${s}-${n++}.md`;
+  return name;
+}
+function today() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+
+/* ---------- Markdown preview (JavaScript copy of build.py md(); keep them in step) ---------- */
+const AR = /[؀-ۿ]/g;
+const arAttr = t => ((t.match(AR) || []).length > t.length * 0.3 ? ' lang="ar" dir="rtl"' : "");
+function inline(s) {
+  s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, u) => `<a href="${u.replace(/"/g, "&quot;")}" target="_blank" rel="noopener">${t}</a>`);
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "<em>$1</em>");
+  s = s.replace(/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g, "<em>$1</em>");
+  return s;
+}
+function mdToHtml(text) {
+  const out = []; let buf = [], lst = null, quote = [];
+  const flush = () => {
+    if (buf.length) { const t = buf.join(" "); out.push(`<p${arAttr(t)}>${inline(t)}</p>`); buf = []; }
+    if (lst) { out.push(`<${lst.tag}>` + lst.items.map(i => `<li${arAttr(i)}>${inline(i)}</li>`).join("") + `</${lst.tag}>`); lst = null; }
+    if (quote.length) { const t = quote.join(" "); out.push(`<blockquote${arAttr(t)}><p>${inline(t)}</p></blockquote>`); quote = []; }
+  };
+  for (const line of text.split("\n")) {
+    const s = line.trim(); let m;
+    if (!s) { flush(); continue; }
+    if ((m = s.match(/^(#{1,3})\s+(.*)$/))) { flush(); const l = m[1].length + 1; out.push(`<h${l}${arAttr(m[2])}>${inline(m[2])}</h${l}>`); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(s)) { flush(); out.push("<hr>"); continue; }
+    if (s.startsWith(">")) { if (buf.length || lst) flush(); quote.push(s.replace(/^[> ]+/, "").trim()); continue; }
+    if ((m = s.match(/^([-*]|\d+[.)])\s+(.*)$/))) {
+      if (buf.length || quote.length) flush();
+      const tag = /\d/.test(m[1][0]) ? "ol" : "ul";
+      if (lst && lst.tag !== tag) flush();
+      if (!lst) lst = { tag, items: [] };
+      lst.items.push(m[2]); continue;
+    }
+    if (lst || quote.length) flush();
+    buf.push(s);
+  }
+  flush();
+  return out.join("\n");
+}
+
+/* ---------- views ---------- */
+function view(name) {
+  ["signin", "list", "editor"].forEach(v => $("v-" + v).hidden = v !== name);
+  $("signout").hidden = name === "signin";
+  window.scrollTo(0, 0);
+}
+
+async function signIn(t, remember) {
+  token = t;
+  const repo = await gh(`/repos/${OWNER}/${REPO}`);
+  if (repo.permissions && repo.permissions.push === false) { const e = new Error("read only"); e.status = 403; throw e; }
+  saveToken(t, remember);
+}
+
+async function loadList() {
+  view("list");
+  show("list-msg", "info", "Loading your articles…");
+  $("items").innerHTML = "";
+  try {
+    let files = [];
+    try { files = await gh(repoPath(DIR) + "?ref=" + BRANCH); } catch (e) { if (e.status !== 404) throw e; }
+    files = files.filter(f => f.type === "file" && f.name.endsWith(".md"));
+    articles = await Promise.all(files.map(async f => {
+      const j = await gh(repoPath(f.path) + "?ref=" + BRANCH);
+      return { name: f.name, path: f.path, sha: j.sha, ...parse(b64decode(j.content)) };
+    }));
+    articles.sort((a, b) => (b.date || "").localeCompare(a.date || "") || a.title.localeCompare(b.title));
+    show("list-msg", "", "");
+    renderList();
+  } catch (e) {
+    if (e.status === 401) return signOut(explain(e, "loading"));
+    show("list-msg", "bad", explain(e, "loading your articles"));
+  }
+}
+
+function renderList() {
+  const pub = articles.filter(a => a.published).length;
+  $("counts").textContent = `${pub} published · ${articles.length - pub} hidden draft${articles.length - pub === 1 ? "" : "s"}`;
+  $("items").innerHTML = articles.length ? articles.map((a, i) => `
+    <li><button type="button" data-i="${i}">
+      <span class="t" dir="auto">${esc(a.title || "(no title)")}</span>
+      <span class="meta">${esc(a.date)}</span>
+      <span class="pill ${a.published ? "pub" : "draft"}">${a.published ? "Published" : "Hidden draft"}</span>
+    </button></li>`).join("") : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+}
+
+function openEditor(a) {
+  current = a ? { ...a } : { name: "", path: "", sha: "", title: "", date: today(), summary: "", published: false, body: "" };
+  $("f-title").value = current.title;
+  $("f-summary").value = current.summary;
+  $("f-date").value = current.date;
+  $("f-published").checked = current.published;
+  $("f-body").value = current.body;
+  $("confirm-slot").innerHTML = "";
+  $("del-btn").hidden = !current.path;
+  show("ed-msg", "", "");
+  setTab("write");
+  setDirty(false);
+  updateSwitch();
+  updateViewLink();
+  view("editor");
+  if (!a) $("f-title").focus();
+}
+
+function updateSwitch() {
+  const on = $("f-published").checked;
+  $("pub-state").textContent = on ? "Published" : "Hidden draft";
+  $("pub-hint").textContent = on ? "Everyone can read it once you save." : "Only you can see it.";
+}
+function updateViewLink() {
+  const live = current && current.path && current.published;
+  $("view-link").hidden = !live;
+  if (live) $("view-link").href = SITE + "#" + slugOf(current.name);
+}
+function setDirty(d) {
+  dirty = d;
+  $("dirty-note").textContent = d ? "Unsaved changes" : "";
+}
+function setTab(t) {
+  const w = t === "write";
+  $("tab-write").setAttribute("aria-selected", w); $("tab-preview").setAttribute("aria-selected", !w);
+  $("pane-write").hidden = !w; $("pane-preview").hidden = w;
+  if (!w) {
+    const title = $("f-title").value;
+    $("pane-preview").innerHTML = `<h2 class="p-title" dir="auto">${esc(title || "(no title)")}</h2><div class="body">${mdToHtml($("f-body").value)}</div>`;
+  }
+}
+
+async function save() {
+  if (!$("f-title").value.trim()) { show("ed-msg", "bad", "Give the article a title before saving."); $("f-title").focus(); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test($("f-date").value)) { show("ed-msg", "bad", "Choose a date before saving."); $("f-date").focus(); return; }
+  const a = { ...current, title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value,
+              published: $("f-published").checked, body: $("f-body").value };
+  const isNew = !a.path;
+  if (isNew) { a.name = newFileName(a.title, a.date); a.path = DIR + "/" + a.name; }
+  $("save-btn").disabled = true; $("save-btn").textContent = "Saving…";
+  try {
+    const res = await gh(repoPath(a.path), { method: "PUT", body: JSON.stringify({
+      message: (isNew ? "Add: " : "Edit: ") + a.title.trim() + (a.published ? "" : " (draft)"),
+      content: b64encode(serialize(a)), branch: BRANCH, ...(a.sha ? { sha: a.sha } : {}) }) });
+    a.sha = res.content.sha;
+    current = a;
+    const i = articles.findIndex(x => x.path === a.path);
+    if (i >= 0) articles[i] = a; else articles.unshift(a);
+    setDirty(false);
+    $("del-btn").hidden = false;
+    updateViewLink();
+    show("ed-msg", "ok", a.published ? "Saved. The public site shows the change in about a minute." : "Saved as a hidden draft. Only you can see it.");
+  } catch (e) {
+    if (isNew) { a.path = ""; a.name = ""; }
+    show("ed-msg", "bad", explain(e, "saving"));
+  } finally {
+    $("save-btn").disabled = false; $("save-btn").textContent = "Save";
+  }
+}
+
+function askDelete() {
+  $("confirm-slot").innerHTML = `<div class="confirm"><span>Delete “${esc(current.title)}” for good? This cannot be undone from this page.</span>
+    <button class="btn danger solid" id="del-yes" type="button">Delete article</button>
+    <button class="btn secondary" id="del-no" type="button">Keep it</button></div>`;
+  $("del-no").onclick = () => { $("confirm-slot").innerHTML = ""; };
+  $("del-yes").onclick = async () => {
+    $("del-yes").disabled = true;
+    try {
+      await gh(repoPath(current.path), { method: "DELETE", body: JSON.stringify({ message: "Delete: " + current.title, sha: current.sha, branch: BRANCH }) });
+      setDirty(false);
+      await loadList();
+      show("list-msg", "ok", "Article deleted.");
+    } catch (e) { $("confirm-slot").innerHTML = ""; show("ed-msg", "bad", explain(e, "deleting")); }
+  };
+}
+
+function askLeave(then) {
+  if (!dirty) return then();
+  $("confirm-slot").innerHTML = `<div class="confirm"><span>You have unsaved changes.</span>
+    <button class="btn" id="lv-save" type="button">Save first</button>
+    <button class="btn danger" id="lv-go" type="button">Leave without saving</button></div>`;
+  $("confirm-slot").scrollIntoView({ block: "nearest" });
+  $("lv-save").onclick = async () => { $("confirm-slot").innerHTML = ""; await save(); if (!dirty) then(); };
+  $("lv-go").onclick = () => { setDirty(false); then(); };
+}
+
+function signOut(msg) {
+  clearToken(); token = ""; articles = []; current = null; setDirty(false);
+  $("token").value = "";
+  show("signin-msg", msg ? "bad" : "ok", msg || "Signed out.");
+  view("signin");
+}
+
+/* ---------- formatting buttons ---------- */
+function fmt(kind) {
+  const ta = $("f-body"), s = ta.selectionStart, e = ta.selectionEnd, v = ta.value, sel = v.slice(s, e);
+  const lineStart = v.lastIndexOf("\n", s - 1) + 1;
+  let rep, from = s, to = e, cursor;
+  const wrap = (l, r, ph) => { const t = sel || ph; rep = l + t + r; cursor = [s + l.length, s + l.length + t.length]; };
+  const prefix = p => { from = lineStart; const block = v.slice(lineStart, e); rep = block.split("\n").map(x => p + x.replace(/^(#{1,3}\s+|>\s*|-\s+)/, "")).join("\n"); cursor = [from + rep.length, from + rep.length]; };
+  if (kind === "b") wrap("**", "**", "bold text");
+  else if (kind === "i") wrap("*", "*", "italic text");
+  else if (kind === "a") wrap("[", "](https://)", "link text");
+  else if (kind === "h") prefix("## ");
+  else if (kind === "q") prefix("> ");
+  else if (kind === "l") prefix("- ");
+  ta.focus();
+  ta.setRangeText(rep, from, to, "end");
+  ta.setSelectionRange(cursor[0], cursor[1]);
+  setDirty(true);
+}
+
+/* ---------- wiring ---------- */
+$("make-key").href = KEY_URL;
+$("signin-form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const t = $("token").value.trim();
+  if (!t) { show("signin-msg", "bad", "Paste your sign-in key first."); $("token").focus(); return; }
+  $("signin-btn").disabled = true; show("signin-msg", "info", "Checking your key…");
+  try { await signIn(t, $("remember").checked); show("signin-msg", "", ""); await loadList(); }
+  catch (e) { token = ""; show("signin-msg", "bad", explain(e, "signing in")); }
+  finally { $("signin-btn").disabled = false; }
+});
+$("signout").onclick = () => askLeave(() => signOut());
+$("new-btn").onclick = () => openEditor(null);
+$("items").addEventListener("click", ev => { const b = ev.target.closest("button[data-i]"); if (b) openEditor(articles[+b.dataset.i]); });
+$("back-btn").onclick = () => askLeave(() => { view("list"); renderList(); });
+$("save-btn").onclick = save;
+$("del-btn").onclick = askDelete;
+$("tab-write").onclick = () => setTab("write");
+$("tab-preview").onclick = () => setTab("preview");
+$("f-published").addEventListener("change", () => { updateSwitch(); setDirty(true); });
+["f-title", "f-summary", "f-date", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
+document.querySelectorAll(".toolbar button").forEach(b => b.addEventListener("click", () => fmt(b.dataset.fmt)));
+document.addEventListener("keydown", ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s" && !$("v-editor").hidden) { ev.preventDefault(); save(); } });
+window.addEventListener("beforeunload", ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ""; } });
+
+(async () => {
+  token = loadToken();
+  if (!token) return view("signin");
+  try { await loadList(); } catch (e) { signOut(explain(e, "loading")); }
+})();
+</script>
+</body>
+</html>

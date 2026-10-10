@@ -40,7 +40,8 @@ a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid 
 .top-in { max-width: 46rem; margin: 0 auto; padding-inline: 16px; height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { font-family: var(--sans); font-weight: 600; font-size: 17px; color: var(--ink); text-decoration: none; display: flex; align-items: baseline; gap: 10px; }
 .brand .ar { font-family: var(--arabic); font-weight: 400; color: var(--ink-muted); font-size: 18px; }
-.top nav { font-family: var(--sans); font-size: 14px; }
+.top nav { font-family: var(--sans); font-size: 14px; white-space: nowrap; }
+.brand { white-space: nowrap; min-width: 0; }
 
 main { max-width: 46rem; margin: 0 auto; padding-inline: 16px; padding-block: 40px 64px; }
 .kicker { font-family: var(--sans); font-size: 12.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
@@ -89,6 +90,7 @@ footer { max-width: 46rem; margin: 0 auto; padding-inline: 16px; padding-block: 
   .intro h1, article h1 { font-size: 28px; }
   .pager { grid-template-columns: 1fr; }
   .pager .next { grid-column: 1; }
+  .brand .ar { display: none; }
 }
 </style>
 
