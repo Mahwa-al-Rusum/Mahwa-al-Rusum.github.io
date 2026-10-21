@@ -52,7 +52,7 @@ h1 { font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 
 .field { display: grid; gap: 6px; }
 .field > label, .label { font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); }
 .hint { font-size: 13px; color: var(--ink-muted); }
-input[type=text], input[type=password], input[type=date], textarea {
+input[type=text], input[type=password], input[type=date], input[type=time], textarea {
   font: 16px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
   border-radius: 8px; padding: 10px 12px; width: 100%; min-width: 0;
 }
@@ -79,9 +79,14 @@ textarea { resize: vertical; }
 .counts { font-size: 13.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .items { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); }
 .items li { border-bottom: 1px solid var(--rule); }
-.items button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 16px 4px; cursor: pointer; }
-.items button:hover .t, .items button:focus-visible .t { color: var(--accent); }
-.items button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.items li.item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.items button.open { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 16px 4px; cursor: pointer; }
+.items button.open:hover .t, .items button.open:focus-visible .t { color: var(--accent); }
+.items button.open:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mv { display: flex; flex-direction: column; gap: 6px; }
+.mvbtn { font: 500 12.5px var(--sans); background: var(--surface); color: var(--accent); border: 1px solid var(--rule); border-radius: 8px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.mvbtn:disabled { opacity: .4; cursor: default; }
+.dt { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .items .t { font-family: var(--serif); font-size: 20px; font-weight: 600; line-height: 1.3; min-width: 0; }
 .items .meta { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; grid-column: 1; }
 .items .pill { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
@@ -202,8 +207,8 @@ textarea { resize: vertical; }
         <span><span class="state" id="pub-state">Hidden draft</span><br><span class="state-hint" id="pub-hint">Only you can see it.</span></span>
       </label>
       <div class="field">
-        <label for="f-date">Date</label>
-        <input id="f-date" type="date">
+        <label for="f-date">Date and time <span class="hint">(sets the order)</span></label>
+        <div class="dt"><input id="f-date" type="date"><input id="f-time" type="time" aria-label="Time (optional)"></div>
       </div>
       <div class="wide">
         <div class="tabs" role="tablist">
@@ -294,12 +299,12 @@ function parse(raw) {
   else { const i = raw.indexOf("\n---\n"); if (i >= 0) { head = raw.slice(0, i); body = raw.slice(i + 5); } }
   const meta = {};
   head.split("\n").forEach(l => { const k = l.indexOf(":"); if (k > 0) meta[l.slice(0, k).trim().toLowerCase()] = l.slice(k + 1).trim(); });
-  return { title: meta.title || "", date: meta.date || "", summary: meta.summary || "",
+  return { title: meta.title || "", date: meta.date || "", time: meta.time || "", summary: meta.summary || "",
            published: ["true", "yes", "1"].includes((meta.published || "false").toLowerCase()), body };
 }
 function serialize(a) {
   const one = s => String(s || "").replace(/\s*\n\s*/g, " ").trim();
-  return "---\ntitle: " + one(a.title) + "\ndate: " + one(a.date) + (one(a.summary) ? "\nsummary: " + one(a.summary) : "") +
+  return "---\ntitle: " + one(a.title) + "\ndate: " + one(a.date) + (one(a.time) ? "\ntime: " + one(a.time) : "") + (one(a.summary) ? "\nsummary: " + one(a.summary) : "") +
          "\npublished: " + (a.published ? "true" : "false") + "\n---\n" + a.body.replace(/\r\n/g, "\n").replace(/\s*$/, "\n");
 }
 function slugOf(name) { return name.replace(/\.md$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "article"; }
@@ -311,6 +316,7 @@ function newFileName(title, date) {
   while (articles.some(a => a.name === name)) name = `${date}-${s}-${n++}.md`;
   return name;
 }
+const sortKey = a => (a.date || "") + "T" + (a.time || "12:00");
 function today() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 
 /* ---------- Markdown preview (JavaScript copy of build.py md(); keep them in step) ---------- */
@@ -377,7 +383,7 @@ async function loadList() {
       const j = await gh(repoPath(f.path) + "?ref=" + BRANCH);
       return { name: f.name, path: f.path, sha: j.sha, ...parse(b64decode(j.content)) };
     }));
-    articles.sort((a, b) => (b.date || "").localeCompare(a.date || "") || a.title.localeCompare(b.title));
+    articles.sort((a, b) => sortKey(b).localeCompare(sortKey(a)) || a.title.localeCompare(b.title));
     show("list-msg", "", "");
     renderList();
   } catch (e) {
@@ -390,18 +396,45 @@ function renderList() {
   const pub = articles.filter(a => a.published).length;
   $("counts").textContent = `${pub} published · ${articles.length - pub} hidden draft${articles.length - pub === 1 ? "" : "s"}`;
   $("items").innerHTML = articles.length ? articles.map((a, i) => `
-    <li><button type="button" data-i="${i}">
+    <li class="item"><button type="button" class="open" data-i="${i}">
       <span class="t" dir="auto">${esc(a.title || "(no title)")}</span>
-      <span class="meta">${esc(a.date)}</span>
+      <span class="meta">${esc(a.date)}${a.time ? " · " + esc(a.time) : ""}</span>
       <span class="pill ${a.published ? "pub" : "draft"}">${a.published ? "Published" : "Hidden draft"}</span>
-    </button></li>`).join("") : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+    </button>
+    <span class="mv"><button type="button" class="mvbtn" data-mv="up" data-i="${i}" aria-label="Move newer: ${esc(a.title)}" ${i === 0 ? "disabled" : ""}>↑ Newer</button><button type="button" class="mvbtn" data-mv="down" data-i="${i}" aria-label="Move older: ${esc(a.title)}" ${i === articles.length - 1 ? "disabled" : ""}>↓ Older</button></span></li>`).join("") : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+}
+
+/* Swap the date/time of two neighbours in the list so their order changes. dir "up" = make newer. */
+async function move(i, dir) {
+  const j = dir === "up" ? i - 1 : i + 1;
+  if (j < 0 || j >= articles.length) return;
+  const a = articles[i], b = articles[j];            // list is newest first
+  let ka = { date: b.date, time: b.time }, kb = { date: a.date, time: a.time };
+  if (sortKey(a) === sortKey(b)) {                   // same moment: nudge by one minute
+    const [h, m] = (a.time || "12:00").split(":").map(Number), mins = Math.min(1438, Math.max(1, h * 60 + m + (dir === "up" ? 1 : -1)));
+    ka = { date: a.date, time: String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0") };
+    kb = { date: b.date, time: b.time || a.time || "12:00" };
+    if (kb.time === ka.time) kb.time = String(Math.floor((mins + (dir === "up" ? -1 : 1)) / 60)).padStart(2, "0") + ":" + String((mins + (dir === "up" ? -1 : 1)) % 60).padStart(2, "0");
+  }
+  show("list-msg", "info", "Changing the order…");
+  try {
+    for (const [art, k] of [[a, ka], [b, kb]]) {
+      const n = { ...art, ...k };
+      const res = await gh(repoPath(n.path), { method: "PUT", body: JSON.stringify({ message: "Order: " + n.title.trim(), content: b64encode(serialize(n)), branch: BRANCH, sha: n.sha }) });
+      Object.assign(art, k, { sha: res.content.sha });
+    }
+    articles.sort((x, y) => sortKey(y).localeCompare(sortKey(x)) || x.title.localeCompare(y.title));
+    renderList();
+    show("list-msg", "ok", "Order changed. Published articles show the new order on the public site in about a minute.");
+  } catch (e) { show("list-msg", "bad", explain(e, "changing the order")); await loadList(); }
 }
 
 function openEditor(a) {
-  current = a ? { ...a } : { name: "", path: "", sha: "", title: "", date: today(), summary: "", published: false, body: "" };
+  current = a ? { ...a } : { name: "", path: "", sha: "", title: "", date: today(), time: "", summary: "", published: false, body: "" };
   $("f-title").value = current.title;
   $("f-summary").value = current.summary;
   $("f-date").value = current.date;
+  $("f-time").value = current.time || "";
   $("f-published").checked = current.published;
   $("f-body").value = current.body;
   $("confirm-slot").innerHTML = "";
@@ -442,7 +475,7 @@ function setTab(t) {
 async function save() {
   if (!$("f-title").value.trim()) { show("ed-msg", "bad", "Give the article a title before saving."); $("f-title").focus(); return; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test($("f-date").value)) { show("ed-msg", "bad", "Choose a date before saving."); $("f-date").focus(); return; }
-  const a = { ...current, title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value,
+  const a = { ...current, title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value, time: $("f-time").value,
               published: $("f-published").checked, body: $("f-body").value };
   const isNew = !a.path;
   if (isNew) { a.name = newFileName(a.title, a.date); a.path = DIR + "/" + a.name; }
@@ -532,14 +565,18 @@ $("signin-form").addEventListener("submit", async ev => {
 });
 $("signout").onclick = () => askLeave(() => signOut());
 $("new-btn").onclick = () => openEditor(null);
-$("items").addEventListener("click", ev => { const b = ev.target.closest("button[data-i]"); if (b) openEditor(articles[+b.dataset.i]); });
+$("items").addEventListener("click", ev => {
+  const m = ev.target.closest("button[data-mv]");
+  if (m) return move(+m.dataset.i, m.dataset.mv);
+  const b = ev.target.closest("button.open"); if (b) openEditor(articles[+b.dataset.i]);
+});
 $("back-btn").onclick = () => askLeave(() => { view("list"); renderList(); });
 $("save-btn").onclick = save;
 $("del-btn").onclick = askDelete;
 $("tab-write").onclick = () => setTab("write");
 $("tab-preview").onclick = () => setTab("preview");
 $("f-published").addEventListener("change", () => { updateSwitch(); setDirty(true); });
-["f-title", "f-summary", "f-date", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
+["f-title", "f-summary", "f-date", "f-time", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
 document.querySelectorAll(".toolbar button").forEach(b => b.addEventListener("click", () => fmt(b.dataset.fmt)));
 document.addEventListener("keydown", ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s" && !$("v-editor").hidden) { ev.preventDefault(); save(); } });
 window.addEventListener("beforeunload", ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ""; } });
