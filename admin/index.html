@@ -324,7 +324,7 @@ function today() { const d = new Date(); return new Date(d.getTime() - d.getTime
 const AR = /[؀-ۿ]/g;
 const arAttr = t => ((t.match(AR) || []).length > t.length * 0.3 ? ' lang="ar" dir="rtl"' : "");
 const HONORIFICS = { "\ufdfa": "صلى الله عليه وسلم", "\ufd40": "رحمه الله", "\ufd41": "رضي الله عنه", "\ufd42": "رضي الله عنها", "\ufd43": "رضي الله عنهم" };
-const PHRASES = /(صلى الله عليه وسلم|رضي الله عنهم|رضي الله عنها|رضي الله عنه|رحمهم الله|رحمه الله|رحمها الله)/g;
+const PHRASES = /(صلى الله عليه وسلم|عليهم السلام|عليها السلام|عليه السلام|رضي الله عنهما|رضي الله عنهم|رضي الله عنها|رضي الله عنه|رحمهم الله|رحمه الله|رحمها الله)/g;
 /* The compact honorific symbols (ﷺ ﵀ ﵁) show as empty boxes in many fonts, so they are written out as words. */
 function spellOut(s) { for (const ch in HONORIFICS) s = s.replace(new RegExp("\\s*" + ch, "g"), " " + HONORIFICS[ch]); return s; }
 function inline(s) {
