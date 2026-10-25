@@ -181,6 +181,8 @@ textarea { resize: vertical; }
         <p class="counts" id="counts"></p>
       </div>
       <button class="btn" id="new-btn" type="button">New article</button>
+      <button class="btn secondary" id="import-btn" type="button">Import document</button>
+      <input type="file" id="import-file" accept=".docx,.md,.txt,.markdown,text/plain,text/markdown" hidden>
     </div>
     <div id="list-msg"></div>
     <ul class="items" id="items"></ul>
@@ -224,6 +226,19 @@ textarea { resize: vertical; }
             <button type="button" data-fmt="q">Quote</button>
             <button type="button" data-fmt="l">List</button>
             <button type="button" data-fmt="a">Link</button>
+            <button type="button" id="dir-btn" title="Typing direction of the box">Direction: auto</button>
+          </div>
+          <div class="toolbar" aria-label="Honorifics" lang="ar" dir="rtl">
+            <button type="button" data-hon="صلى الله عليه وسلم">ﷺ</button>
+            <button type="button" data-hon="عليه السلام">عليه السلام</button>
+            <button type="button" data-hon="رضي الله عنه">رضي الله عنه</button>
+            <button type="button" data-hon="رضي الله عنها">رضي الله عنها</button>
+            <button type="button" data-hon="رضي الله عنهم">رضي الله عنهم</button>
+            <button type="button" data-hon="رحمه الله">رحمه الله</button>
+            <button type="button" data-hon="رحمها الله">رحمها الله</button>
+            <button type="button" data-hon="رحمهم الله">رحمهم الله</button>
+            <button type="button" data-hon="عز وجل">عز وجل</button>
+            <button type="button" data-hon="تعالى">تعالى</button>
           </div>
           <label for="f-body" class="label" hidden>Article text</label>
           <textarea id="f-body" dir="auto" spellcheck="true"></textarea>
@@ -559,6 +574,80 @@ function fmt(kind) {
   setDirty(true);
 }
 
+
+/* ---------- honorifics, direction, Arabic quote ---------- */
+function insertAtCursor(text) {
+  const ta = $("f-body"); ta.focus();
+  const s = ta.selectionStart, e = ta.selectionEnd, v = ta.value;
+  const pre = s > 0 && !/[\s(\[]/.test(v[s - 1]) ? " " : (s > 0 && v[s - 1] !== " " && v[s - 1] !== "\n" ? " " : "");
+  ta.setRangeText(pre + text, s, e, "end"); setDirty(true);
+}
+document.querySelectorAll("[data-hon]").forEach(b => b.addEventListener("click", () => insertAtCursor(b.dataset.hon)));
+const DIRS = ["auto", "rtl", "ltr"]; let dirI = 0;
+$("dir-btn").onclick = () => { dirI = (dirI + 1) % 3; $("f-body").dir = DIRS[dirI]; $("dir-btn").textContent = "Direction: " + DIRS[dirI]; };
+
+/* ---------- import (.docx read in the browser, no upload anywhere) ---------- */
+async function unzipEntry(buf, wanted) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= 0; i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("not a zip");
+  let p = dv.getUint32(eocd + 16, true); const n = dv.getUint16(eocd + 10, true);
+  for (let k = 0; k < n; k++) {
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl));
+    if (name === wanted) {
+      const lh = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+      const data = u8.subarray(lh, lh + csize);
+      if (method === 0) return new TextDecoder().decode(data);
+      const ds = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      return new TextDecoder().decode(await new Response(ds).arrayBuffer());
+    }
+    p += 46 + nl + el + cl;
+  }
+  throw new Error("no " + wanted);
+}
+function docxXmlToMd(xml) {
+  const doc = new DOMParser().parseFromString(xml, "application/xml"), W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const out = [];
+  for (const p of doc.getElementsByTagNameNS(W, "p")) {
+    const ps = p.getElementsByTagNameNS(W, "pStyle")[0], st = ps ? ps.getAttribute("w:val") : "";
+    const runs = [];
+    for (const r of p.getElementsByTagNameNS(W, "r")) {
+      const t = [...r.getElementsByTagNameNS(W, "t")].map(x => x.textContent).join("");
+      if (!t) continue;
+      const on = tag => { const e = r.getElementsByTagNameNS(W, tag)[0]; return !!e && e.getAttribute("w:val") !== "0" && e.getAttribute("w:val") !== "false"; };
+      const b = on("b"), i = on("i");
+      if (runs.length && runs[runs.length - 1][1] === b && runs[runs.length - 1][2] === i) runs[runs.length - 1][0] += t; else runs.push([t, b, i]);
+    }
+    let txt = runs.map(([t, b, i]) => { const c = t.trim(); if (!c) return t; const m = b && i ? "***" : b ? "**" : i ? "*" : ""; return t.slice(0, t.length - t.trimStart().length) + m + c + m + t.slice(t.trimEnd().length); }).join("").trim();
+    if (!txt) continue;
+    const hasNum = p.getElementsByTagNameNS(W, "numPr").length > 0;
+    if (/^Heading1|^Title/i.test(st)) txt = "# " + txt;
+    else if (/^Heading2/i.test(st)) txt = "## " + txt;
+    else if (/^Heading[3-9]/i.test(st)) txt = "### " + txt;
+    else if (/Quote/i.test(st)) txt = "> " + txt;
+    else if (/List/i.test(st) || hasNum) txt = "- " + txt;
+    out.push(txt);
+  }
+  return out.reduce((a, l) => { if (a.length && l.startsWith("- ") && a[a.length - 1].startsWith("- ")) a[a.length - 1] += "\n" + l; else a.push(l); return a; }, []).join("\n\n") + "\n";
+}
+$("import-btn").onclick = () => askLeave(() => $("import-file").click());
+$("import-file").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  try {
+    let body;
+    if (/\.docx$/i.test(f.name)) body = docxXmlToMd(await unzipEntry(await f.arrayBuffer(), "word/document.xml"));
+    else body = (await f.text()).replace(/^---\n[\s\S]*?\n---\n/, "");
+    const m = body.match(/^#{1,2}\s+(.+)$/m);
+    openEditor(null);
+    $("f-title").value = m ? m[1].replace(/[*]/g, "") : f.name.replace(/\.[^.]+$/, "");
+    $("f-body").value = spellOut(body);
+    setDirty(true);
+    show("ed-msg", "info", "Imported “" + f.name + "” as a new hidden draft. Check it, then Save.");
+  } catch (e) { view("list"); alert("Could not import this file: " + e.message); }
+});
+
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
 $("signin-form").addEventListener("submit", async ev => {
@@ -584,7 +673,7 @@ $("tab-write").onclick = () => setTab("write");
 $("tab-preview").onclick = () => setTab("preview");
 $("f-published").addEventListener("change", () => { updateSwitch(); setDirty(true); });
 ["f-title", "f-summary", "f-date", "f-time", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
-document.querySelectorAll(".toolbar button").forEach(b => b.addEventListener("click", () => fmt(b.dataset.fmt)));
+document.querySelectorAll(".toolbar button[data-fmt]").forEach(b => b.addEventListener("click", () => fmt(b.dataset.fmt)));
 document.addEventListener("keydown", ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s" && !$("v-editor").hidden) { ev.preventDefault(); save(); } });
 window.addEventListener("beforeunload", ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ""; } });
 
