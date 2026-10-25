@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Maḥw al-Rusūm">
+<meta property="og:title" content="Maḥw al-Rusūm">
+<meta property="og:description" content="Articles on the Qur&#x27;an, the Sunnah and the scholars.">
+<meta property="og:url" content="https://mahwa-al-rusum.github.io/">
+<meta name="twitter:card" content="summary">
+<meta name="description" content="Articles on the Qur&#x27;an, the Sunnah and the scholars.">
 </head>
 <body>
 <title>Maḥw al-Rusūm</title>
@@ -86,6 +93,16 @@ article[dir="rtl"] .body { font-family: var(--arabic); font-size: 20px; line-hei
 .pager .next { text-align: end; grid-column: 2; }
 .pager .lbl { font-family: var(--sans); font-size: 12.5px; color: var(--accent); }
 footer { max-width: 46rem; margin: 0 auto; padding-inline: 16px; padding-block: 0 40px; font-family: var(--sans); font-size: 13px; color: var(--ink-muted); }
+
+.share { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 18px 0 4px; font-family: var(--sans); }
+.share .lbl { font-size: 13px; color: var(--ink-muted); margin-inline-end: 4px; }
+.share a, .share button { font: 500 13.5px var(--sans); text-decoration: none; color: var(--accent); background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.share a:hover, .share button:hover { background: var(--accent-soft); }
+.share .main { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.share-toast { position: fixed; inset-inline: 16px; bottom: 76px; margin: 0 auto; max-width: 24rem; text-align: center; font: 500 14px var(--sans); background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: 8px; z-index: 30; }
+.selbar { position: fixed; inset-inline: 0; bottom: 0; z-index: 20; display: flex; justify-content: center; gap: 8px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--rule); font-family: var(--sans); }
+.selbar button { font: 600 14.5px var(--sans); border-radius: 8px; padding: 10px 16px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+.selbar button.alt { background: var(--surface); color: var(--accent); }
 @media (max-width: 560px) {
   body { font-size: 17px; }
   .intro h1, article h1 { font-size: 28px; }
@@ -110,6 +127,9 @@ const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&
 const fmt = d => { const t = new Date(d + "T12:00:00"); return isNaN(t) ? d : t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); };
 const dirAttr = p => p.rtl ? ' lang="ar" dir="rtl"' : "";
 let query = "";
+const ROOT = location.pathname.replace(/a\/[^/]*\/?$/, "").replace(/index\.html$/, "");
+const postUrl = p => location.origin + ROOT + "a/" + p.slug + "/";
+document.querySelectorAll('a[href="#home"]').forEach(a => a.href = ROOT + "#home");
 
 function home() {
   document.title = "Maḥw al-Rusūm";
@@ -135,7 +155,7 @@ function renderList() {
   const q = query.trim().toLowerCase();
   const hits = POSTS.filter(p => !q || (p.title + " " + p.summary + " " + p.html).toLowerCase().includes(q));
   document.getElementById("list").innerHTML = hits.length ? hits.map(p => `
-    <li><a href="#${p.slug}"${dirAttr(p)}>
+    <li><a href="${ROOT}#${p.slug}"${dirAttr(p)}>
       <span class="meta" dir="ltr">${fmt(p.date)} · ${p.minutes} min read</span>
       <span class="t">${esc(p.title)}</span>
       <span class="s">${esc(p.summary)}</span>
@@ -146,20 +166,57 @@ function article(i) {
   const p = POSTS[i], newer = POSTS[i - 1], older = POSTS[i + 1];
   document.title = p.title + " · Maḥw al-Rusūm";
   view.innerHTML = `
-    <a class="back" href="#home">← All articles</a>
+    <a class="back" href="${ROOT}#home">← All articles</a>
     <article${dirAttr(p)}>
       <header><h1>${esc(p.title)}</h1><p class="meta" dir="ltr">${fmt(p.date)} · ${p.minutes} min read</p></header>
+      <div class="share" role="group" aria-label="Share this article"><span class="lbl">Share</span>
+        <button type="button" class="main" id="sh-native">Share…</button>
+        <a href="https://wa.me/?text=${encodeURIComponent(p.title + "\n" + postUrl(p))}" target="_blank" rel="noopener">WhatsApp</a>
+        <a href="https://t.me/share/url?url=${encodeURIComponent(postUrl(p))}&text=${encodeURIComponent(p.title)}" target="_blank" rel="noopener">Telegram</a>
+        <a href="https://twitter.com/intent/tweet?url=${encodeURIComponent(postUrl(p))}&text=${encodeURIComponent(p.title)}" target="_blank" rel="noopener">X</a>
+        <a href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl(p))}" target="_blank" rel="noopener">Facebook</a>
+        <a href="mailto:?subject=${encodeURIComponent(p.title)}&body=${encodeURIComponent(p.title + "\n" + postUrl(p))}">Email</a>
+        <button type="button" id="sh-copy">Copy link</button></div>
       <div class="body">${p.html}</div>
     </article>
     <nav class="pager">
-      ${older ? `<a href="#${older.slug}"><span class="lbl">← Older</span><span>${esc(older.title)}</span></a>` : ""}
-      ${newer ? `<a class="next" href="#${newer.slug}"><span class="lbl">Newer →</span><span>${esc(newer.title)}</span></a>` : ""}
+      ${older ? `<a href="${ROOT}#${older.slug}"><span class="lbl">← Older</span><span>${esc(older.title)}</span></a>` : ""}
+      ${newer ? `<a class="next" href="${ROOT}#${newer.slug}"><span class="lbl">Newer →</span><span>${esc(newer.title)}</span></a>` : ""}
     </nav>`;
+  const url = postUrl(p);
+  document.getElementById("sh-native").onclick = () => shareOut({ title: p.title, text: p.title, url });
+  document.getElementById("sh-copy").onclick = () => copyOut(url, "Link copied");
+  if (!navigator.share) document.getElementById("sh-native").hidden = true;
   window.scrollTo(0, 0);
 }
 
+function toast(m) { const d = document.createElement("div"); d.className = "share-toast"; d.setAttribute("role", "status"); d.textContent = m; document.body.appendChild(d); setTimeout(() => d.remove(), 2200); }
+function copyOut(text, msg) {
+  const done = () => toast(msg);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => toast("Could not copy"));
+  else { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) { toast("Could not copy"); } t.remove(); }
+}
+async function shareOut(d) { try { await navigator.share(d); } catch (e) { if (e.name !== "AbortError") copyOut((d.text ? d.text + "\n" : "") + d.url, "Copied"); } }
+
+/* Share a selected passage: a bar appears at the bottom while text inside the article is selected. */
+let selbar = null;
+document.addEventListener("selectionchange", () => {
+  const s = window.getSelection(), txt = s ? s.toString().trim() : "";
+  const inArt = s && s.rangeCount && s.anchorNode && (s.anchorNode.parentElement || {}).closest && s.anchorNode.parentElement.closest(".body");
+  if (!txt || !inArt) { if (selbar) { selbar.remove(); selbar = null; } return; }
+  const i = POSTS.findIndex(p => p.slug === currentSlug()); if (i < 0) return;
+  const p = POSTS[i], quote = "“" + txt.replace(/\s+/g, " ").slice(0, 1500) + "”\n— " + p.title, url = postUrl(p);
+  if (!selbar) { selbar = document.createElement("div"); selbar.className = "selbar"; document.body.appendChild(selbar); }
+  selbar.innerHTML = (navigator.share ? '<button type="button" id="sb-share">Share this passage</button>' : '') +
+    '<button type="button" class="alt" id="sb-copy">Copy with link</button>' +
+    '<a style="align-self:center;font-size:14px" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(quote + "\n" + url) + '">WhatsApp</a>';
+  const sh = selbar.querySelector("#sb-share"); if (sh) sh.onclick = () => shareOut({ title: p.title, text: quote, url });
+  selbar.querySelector("#sb-copy").onclick = () => copyOut(quote + "\n" + url, "Passage copied with link");
+});
+
+function currentSlug() { const m = location.pathname.match(/\/a\/([^/]+)\/?$/); return location.hash.slice(1) || (m ? m[1] : ""); }
 function route() {
-  const h = location.hash.slice(1);
+  const h = currentSlug();
   const i = POSTS.findIndex(p => p.slug === h);
   i >= 0 ? article(i) : home();
 }

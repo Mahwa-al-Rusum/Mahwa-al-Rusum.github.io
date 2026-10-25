@@ -280,6 +280,8 @@ textarea { resize: vertical; }
     </div>
     <div class="savebar">
       <button class="btn" id="save-btn" type="button">Save</button>
+      <button class="btn secondary" id="share-art" type="button">Share article</button>
+      <button class="btn secondary" id="share-sel" type="button">Share selection</button>
       <button class="btn secondary" id="dl-md" type="button">Download</button>
       <button class="btn secondary" id="dl-docx" type="button">Download Word</button>
       <button class="btn secondary" id="upd-btn" type="button">Update from file</button>
@@ -847,6 +849,28 @@ $("upd-file").addEventListener("change", async ev => {
     show("ed-msg", "info", "Loaded “" + f.name + "” into this article. Look it over (Preview tab), then press Save. Leaving without saving keeps the old version.");
   } catch (e) { show("ed-msg", "bad", "Could not read this file: " + e.message); }
 });
+
+
+/* ---------- share from the editor (whole article, or the text selected in the box) ---------- */
+const liveUrl = () => current && current.path && current.published ? SITE + "a/" + slugOf(current.name) + "/" : "";
+async function shareText(text, url, title) {
+  const data = { title, text: url ? text : text, ...(url ? { url } : {}) };
+  if (navigator.share) { try { await navigator.share(data); return; } catch (e) { if (e.name === "AbortError") return; } }
+  try { await navigator.clipboard.writeText(text + (url ? "\n" + url : "")); show("ed-msg", "ok", "Copied. Paste it into WhatsApp, Telegram or any app."); }
+  catch (e) { show("ed-msg", "bad", "This browser cannot share or copy from here."); }
+}
+$("share-art").onclick = () => {
+  const f = formState(), url = liveUrl(), t = f.title.trim();
+  if (url) return shareText(t + (f.summary ? "\n" + f.summary : ""), url, t);
+  show("ed-msg", "info", "This article is a hidden draft, so there is no public link yet. Sharing its text instead.");
+  return shareText(t + "\n\n" + f.body.replace(/^#{1,3}\s+/gm, "").replace(/^>\s?/gm, "").replace(/\*\*|\*/g, ""), "", t);
+};
+$("share-sel").onclick = () => {
+  const ta = $("f-body"), sel = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+  if (!sel) { show("ed-msg", "bad", "Select the passage in the text box first (press and hold, then drag), then tap Share selection."); return; }
+  const t = $("f-title").value.trim(), url = liveUrl();
+  return shareText("“" + sel.replace(/^>\s?/gm, "").replace(/\*\*|\*/g, "") + "”\n— " + t, url, t);
+};
 
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
