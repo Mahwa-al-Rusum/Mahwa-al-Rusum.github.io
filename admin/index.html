@@ -273,6 +273,10 @@ textarea { resize: vertical; }
     </div>
     <div class="savebar">
       <button class="btn" id="save-btn" type="button">Save</button>
+      <button class="btn secondary" id="dl-md" type="button">Download</button>
+      <button class="btn secondary" id="dl-docx" type="button">Download Word</button>
+      <button class="btn secondary" id="upd-btn" type="button">Update from file</button>
+      <input type="file" id="upd-file" accept=".docx,.md,.txt,.markdown,text/plain,text/markdown" hidden>
       <span class="hint" id="dirty-note"></span>
       <span class="spacer"></span>
       <button class="btn danger" id="del-btn" type="button">Delete</button>
@@ -751,6 +755,91 @@ $("cuts").addEventListener("click", ev => { const b = ev.target.closest("button.
 $("split-heads").onclick = () => { cutAt = new Set(); blocks.forEach((b, i) => { if (i > 0 && /^##\s+/.test(b)) cutAt.add(i); }); renderSplit(); };
 $("split-clear").onclick = () => { cutAt = new Set(); renderSplit(); };
 $("split-go").onclick = doSplit;
+
+
+/* ---------- offline editing: download an article, edit it anywhere, upload it back ---------- */
+const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return b => { let c = -1; for (const x of b) c = t[(c ^ x) & 255] ^ (c >>> 8); return (c ^ -1) >>> 0; }; })();
+function zipStored(files) {
+  const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+  for (const [name, text] of files) {
+    const nb = enc.encode(name), data = enc.encode(text), crc = CRC(data);
+    const lh = new DataView(new ArrayBuffer(30)); lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, nb.length, true);
+    parts.push(new Uint8Array(lh.buffer), nb, data);
+    const ch = new DataView(new ArrayBuffer(46)); ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true); ch.setUint16(28, nb.length, true); ch.setUint32(42, off, true);
+    cen.push(new Uint8Array(ch.buffer), nb); off += 30 + nb.length + data.length;
+  }
+  const csize = cen.reduce((a, b) => a + b.length, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, csize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...cen, new Uint8Array(end.buffer)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+const xesc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const ARSEG = /([\u0600-\u06ff\ufd3e\ufdfa\ufd40-\ufd4f][\u0600-\u06ff\ufd3e\ufdfa\ufd40-\ufd4f\s،؛:.()«»"'\-—]*[\u0600-\u06ff\ufd3e\ufdfa\ufd40-\ufd4f]|[\u0600-\u06ff])/;
+function runsXml(line) {
+  line = line.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, "$1");
+  const toks = line.split(/(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/).filter(x => x !== "");
+  return toks.map(tk => {
+    let b = false, i = false, t = tk, m;
+    if ((m = /^\*\*\*(.+)\*\*\*$/.exec(tk))) { b = i = true; t = m[1]; } else if ((m = /^\*\*(.+)\*\*$/.exec(tk))) { b = true; t = m[1]; } else if ((m = /^\*(.+)\*$/.exec(tk))) { i = true; t = m[1]; }
+    return t.split(ARSEG).filter(x => x !== "").map(seg => {
+      const ar = /^[\u0600-\u06ff\ufd3e\ufdfa\ufd40-\ufd4f]/.test(seg);
+      return `<w:r><w:rPr>${ar ? '<w:rFonts w:ascii="Geeza Pro" w:hAnsi="Geeza Pro" w:cs="Geeza Pro"/>' : ""}${b ? "<w:b/><w:bCs/>" : ""}${i ? "<w:i/><w:iCs/>" : ""}${ar ? "<w:rtl/>" : ""}</w:rPr><w:t xml:space="preserve">${xesc(seg)}</w:t></w:r>`;
+    }).join("");
+  }).join("");
+}
+function mdToDocx(title, body) {
+  const paras = [];
+  const add = (style, text, bidi) => paras.push(`<w:p><w:pPr>${style ? `<w:pStyle w:val="${style}"/>` : ""}${bidi ? "<w:bidi/>" : ""}</w:pPr>${runsXml(text)}</w:p>`);
+  add("Title", title, false);
+  for (const blk of body.replace(/\r\n/g, "\n").split(/\n{2,}/)) {
+    const b = blk.trim(); if (!b) continue;
+    if (/^---+$/.test(b)) continue;
+    let m;
+    if ((m = /^(#{1,3})\s+([^]*)$/.exec(b))) { add("Heading" + (m[1].length + 0), m[2].replace(/\n/g, " "), (m[2].match(AR) || []).length > m[2].length * .3); continue; }
+    if (/^>/.test(b)) { const t = b.replace(/^>\s?/gm, "").replace(/\n/g, " "); add("IntenseQuote", t, (t.match(AR) || []).length > t.length * .3); continue; }
+    if (/^[-*]\s/.test(b)) { b.split("\n").forEach(l => add("ListBullet", l.replace(/^[-*]\s+/, ""), false)); continue; }
+    const t = b.replace(/\n/g, " "); add("", t, (t.match(AR) || []).length > t.length * .3);
+  }
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const sty = (id, name, extra, rpr) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr>${extra}</w:pPr><w:rPr>${rpr}</w:rPr></w:style>`;
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles ${W}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Geeza Pro"/><w:sz w:val="24"/><w:szCs w:val="28"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="300" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+${sty("Title", "Title", "", '<w:b/><w:sz w:val="40"/>')}${sty("Heading1", "heading 1", "<w:keepNext/>", '<w:b/><w:sz w:val="34"/>')}${sty("Heading2", "heading 2", "<w:keepNext/>", '<w:b/><w:sz w:val="30"/>')}${sty("Heading3", "heading 3", "<w:keepNext/>", '<w:b/><w:sz w:val="26"/>')}
+${sty("IntenseQuote", "Intense Quote", '<w:ind w:left="567" w:right="567"/>', "<w:i/>")}${sty("ListBullet", "List Bullet", '<w:ind w:left="567" w:hanging="283"/>', "")}</w:styles>`;
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W}><w:body>${paras.join("")}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>`;
+  return zipStored([
+    ["[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'],
+    ["_rels/.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'],
+    ["word/_rels/document.xml.rels", '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ["word/document.xml", doc], ["word/styles.xml", styles]]);
+}
+function saveBlob(blob, name) { const u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
+function dlName(ext) { return (current && current.name ? current.name.replace(/\.md$/, "") : slugOf($("f-title").value || "article")) + ext; }
+function formState() { return { title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value, time: $("f-time").value, published: $("f-published").checked, body: $("f-body").value }; }
+$("dl-md").onclick = () => saveBlob(new Blob([serialize(formState())], { type: "text/markdown;charset=utf-8" }), dlName(".md"));
+$("dl-docx").onclick = () => { const f = formState(); saveBlob(mdToDocx(f.title, f.body), dlName(".docx")); };
+$("upd-btn").onclick = () => $("upd-file").click();
+$("upd-file").addEventListener("change", async ev => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  try {
+    if (/\.docx$/i.test(f.name)) {
+      let body = docxXmlToMd(await unzipEntry(await f.arrayBuffer(), "word/document.xml"));
+      const m = /^# ([^\n]+)\n\n?/.exec(body);
+      if (m) { $("f-title").value = spellOut(m[1].replace(/\*/g, "")); body = body.slice(m[0].length); }
+      $("f-body").value = spellOut(body);
+    } else {
+      const a = parse(await f.text());
+      if (a.title) $("f-title").value = spellOut(a.title);
+      if (a.summary) $("f-summary").value = spellOut(a.summary);
+      if (a.date) $("f-date").value = a.date;
+      if (a.time || a.date) $("f-time").value = a.time;
+      $("f-body").value = spellOut(a.body);
+    }
+    setDirty(true); setTab("write");
+    show("ed-msg", "info", "Loaded “" + f.name + "” into this article. Look it over (Preview tab), then press Save. Leaving without saving keeps the old version.");
+  } catch (e) { show("ed-msg", "bad", "Could not read this file: " + e.message); }
+});
 
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
