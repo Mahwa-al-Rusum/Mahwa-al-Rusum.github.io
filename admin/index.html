@@ -111,6 +111,15 @@ textarea { resize: vertical; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 0; }
 .tabs button { font: 600 14px var(--sans); background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; color: var(--ink-muted); cursor: pointer; }
 .tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* split view */
+.cuts { list-style: none; margin: 12px 0; padding: 0; }
+.cuts .blk { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 8px 12px; margin: 0; font-size: 14px; color: var(--ink-muted); }
+.cuts .blk b { color: var(--ink); }
+.cuts .cut { display: block; width: 100%; margin: 4px 0; padding: 7px; font: 600 13px var(--sans); border: 1px dashed var(--rule); border-radius: 8px; background: var(--paper); color: var(--ink-muted); cursor: pointer; }
+.cuts .cut[aria-pressed=true] { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); }
+.piece { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 10px 12px; margin: 8px 0; }
+.piece .hint { display: block; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0; }
 .toolbar button { font: 500 13.5px var(--sans); background: var(--sunk); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
 #f-body { font-family: var(--serif); font-size: 18px; line-height: 1.7; min-height: 26rem; unicode-bidi: plaintext; }
@@ -188,6 +197,20 @@ textarea { resize: vertical; }
     <ul class="items" id="items"></ul>
   </section>
 
+
+  <!-- Split -->
+  <section id="v-split" hidden>
+    <div class="ed-top"><button class="linkbtn" id="split-back" type="button">← Back to the article</button></div>
+    <h2 style="font-family:var(--serif)">Split into separate articles</h2>
+    <p class="help">Tap <b>Cut here</b> between paragraphs where a new article should begin. Each piece becomes its own article, in order. The first piece stays in this article; the others are new hidden drafts. Later parts of the same series are renumbered.</p>
+    <div class="row"><button class="btn secondary" id="split-heads" type="button">Cut at every heading</button><button class="btn secondary" id="split-clear" type="button">Clear cuts</button></div>
+    <ul class="cuts" id="cuts"></ul>
+    <h3 style="font-family:var(--serif)">The pieces</h3>
+    <div id="pieces"></div>
+    <div id="split-msg"></div>
+    <div class="row"><button class="btn" id="split-go" type="button">Split and save</button></div>
+  </section>
+
   <!-- Editor -->
   <section id="v-editor" hidden>
     <div class="ed-top">
@@ -226,6 +249,7 @@ textarea { resize: vertical; }
             <button type="button" data-fmt="q">Quote</button>
             <button type="button" data-fmt="l">List</button>
             <button type="button" data-fmt="a">Link</button>
+            <button type="button" id="split-btn">Split into articles</button>
             <button type="button" id="dir-btn" title="Typing direction of the box">Direction: auto</button>
           </div>
           <div class="toolbar" aria-label="Honorifics" lang="ar" dir="rtl">
@@ -381,7 +405,7 @@ function mdToHtml(text) {
 
 /* ---------- views ---------- */
 function view(name) {
-  ["signin", "list", "editor"].forEach(v => $("v-" + v).hidden = v !== name);
+  ["signin", "list", "editor", "split"].forEach(v => $("v-" + v).hidden = v !== name);
   $("signout").hidden = name === "signin";
   window.scrollTo(0, 0);
 }
@@ -647,6 +671,86 @@ $("import-file").addEventListener("change", async ev => {
     show("ed-msg", "info", "Imported “" + f.name + "” as a new hidden draft. Check it, then Save.");
   } catch (e) { view("list"); alert("Could not import this file: " + e.message); }
 });
+
+
+/* ---------- split a long article into several, renumbering the series ---------- */
+const PART_RE = /^(.*?)\s*\(Part\s+(\d+)(?::\s*([^]*))?\)\s*$/;
+let blocks = [], cutAt = new Set();
+const fileTitle = t => t.replace(/[*_`#>]/g, "").trim();
+function addMinutes(date, time, n) {
+  const [h, m] = (time || "12:00").split(":").map(Number); let tot = h * 60 + m + n, d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + Math.floor(tot / 1440)); tot = ((tot % 1440) + 1440) % 1440;
+  return { date: d.toISOString().slice(0, 10), time: String(Math.floor(tot / 60)).padStart(2, "0") + ":" + String(tot % 60).padStart(2, "0") };
+}
+function openSplit() {
+  const body = $("f-body").value.replace(/\r\n/g, "\n");
+  blocks = body.split(/\n{2,}/).map(x => x.trim()).filter(Boolean); cutAt = new Set();
+  show("split-msg", "", ""); renderSplit(); view("split");
+}
+function blockLabel(b) { const h = /^#{1,3}\s+/.test(b); const t = b.replace(/^#{1,3}\s+/, "").replace(/[*_>]/g, ""); return (h ? "<b>Heading:</b> " : "") + esc(t.slice(0, 150)) + (t.length > 150 ? "…" : ""); }
+function pieces() {
+  const out = []; let cur = [];
+  blocks.forEach((b, i) => { if (i > 0 && cutAt.has(i)) { out.push(cur); cur = []; } cur.push(b); });
+  out.push(cur); return out;
+}
+function pieceTitle(parts) { const h = parts.find(b => /^#{1,3}\s+/.test(b)); return fileTitle(h ? h.replace(/^#{1,3}\s+/, "") : parts[0].split(/\s+/).slice(0, 8).join(" ")); }
+function renderSplit() {
+  $("cuts").innerHTML = blocks.map((b, i) => (i > 0 ? `<li><button type="button" class="cut" data-i="${i}" aria-pressed="${cutAt.has(i)}">${cutAt.has(i) ? "✂ New article starts here (tap to undo)" : "✂ Cut here"}</button></li>` : "") + `<li class="blk" dir="auto">${blockLabel(b)}</li>`).join("");
+  const ps = pieces();
+  $("pieces").innerHTML = ps.map((p, i) => {
+    const t = (i === 0 ? ((PART_RE.exec($("f-title").value) || [])[3] || "") : pieceTitle(p));
+    return `<div class="piece"><span class="hint">Piece ${i + 1} of ${ps.length}${i === 0 ? " (stays in this article)" : " (new hidden draft)"} · ${p.length} paragraph${p.length === 1 ? "" : "s"}</span>
+      <label class="label" for="pt-${i}">Name for the part</label><input id="pt-${i}" class="ptitle" data-i="${i}" type="text" dir="auto" value="${esc(t)}"></div>`;
+  }).join("");
+}
+function partTitle(prefix, n, sub) { return `${prefix} (Part ${n}${sub ? ": " + sub : ""})`; }
+async function doSplit() {
+  if (!current || !current.path) { show("split-msg", "bad", "Save this article first (Save button), then split it."); return; }
+  const ps = pieces(), k = ps.length;
+  if (k < 2) { show("split-msg", "bad", "Choose at least one place to cut."); return; }
+  const names = ps.map((_, i) => $("pt-" + i).value.trim());
+  const cur = current, m = PART_RE.exec($("f-title").value.trim());
+  const prefix = m ? m[1].trim() : $("f-title").value.trim(), n0 = m ? +m[2] : 1;
+  const later = m ? articles.filter(a => a.path !== cur.path && (PART_RE.exec(a.title) || [])[1] && PART_RE.exec(a.title)[1].trim() === prefix && +PART_RE.exec(a.title)[2] > n0).sort((a, b) => +PART_RE.exec(b.title)[2] - +PART_RE.exec(a.title)[2]) : [];
+  if (!confirm(`This makes ${k - 1} new hidden draft${k > 2 ? "s" : ""} and renumbers ${later.length} later part${later.length === 1 ? "" : "s"}. Continue?`)) return;
+  $("split-go").disabled = true;
+  const base = { date: $("f-date").value, time: $("f-time").value || "12:00" };
+  const put = async (a, msg) => {
+    const res = await gh(repoPath(a.path), { method: "PUT", body: JSON.stringify({ message: msg, content: b64encode(serialize(a)), branch: BRANCH, ...(a.sha ? { sha: a.sha } : {}) }) });
+    a.sha = res.content.sha; return a;
+  };
+  try {
+    // 1. new pieces (pieces 2..k) as hidden drafts
+    for (let i = 1; i < k; i++) {
+      show("split-msg", "info", `Saving new article ${i} of ${k - 1}…`);
+      const t = addMinutes(base.date, base.time, i), title = partTitle(prefix, n0 + i, names[i]);
+      const a = { name: newFileName(title, t.date), title, date: t.date, time: t.time, summary: "", published: false, body: ps[i].join("\n\n") };
+      a.path = DIR + "/" + a.name; await put(a, "Add: " + title + " (draft, split)"); articles.unshift(a);
+    }
+    // 2. later parts of the series, highest first: renumber and move k-1 minutes later
+    for (const a of later) {
+      const pm = PART_RE.exec(a.title), t = addMinutes(a.date, a.time || "12:00", k - 1);
+      show("split-msg", "info", "Renumbering: " + a.title.slice(-40) + "…");
+      Object.assign(a, { title: partTitle(pm[1].trim(), +pm[2] + k - 1, pm[3]), date: t.date, time: t.time });
+      await put(a, "Renumber: " + a.title);
+    }
+    // 3. this article keeps the first piece
+    show("split-msg", "info", "Saving the first piece…");
+    const first = { ...cur, title: m ? partTitle(prefix, n0, names[0]) : $("f-title").value.trim(), summary: $("f-summary").value, date: base.date, time: $("f-time").value, published: $("f-published").checked, body: ps[0].join("\n\n") };
+    const saved = await put(first, "Split: " + first.title);
+    const i = articles.findIndex(x => x.path === saved.path); if (i >= 0) articles[i] = saved; else articles.unshift(saved);
+    setDirty(false); await loadList();
+    show("list-msg", "ok", `Split into ${k} articles. The new parts are hidden drafts; open each to check it and publish.`);
+  } catch (e) {
+    show("split-msg", "bad", explain(e, "splitting") + " Nothing was lost. Go back, open the list and check which parts were created.");
+  } finally { $("split-go").disabled = false; }
+}
+$("split-btn").onclick = openSplit;
+$("split-back").onclick = () => view("editor");
+$("cuts").addEventListener("click", ev => { const b = ev.target.closest("button.cut"); if (!b) return; const i = +b.dataset.i; cutAt.has(i) ? cutAt.delete(i) : cutAt.add(i); renderSplit(); });
+$("split-heads").onclick = () => { cutAt = new Set(); blocks.forEach((b, i) => { if (i > 0 && /^##\s+/.test(b)) cutAt.add(i); }); renderSplit(); };
+$("split-clear").onclick = () => { cutAt = new Set(); renderSplit(); };
+$("split-go").onclick = doSplit;
 
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
