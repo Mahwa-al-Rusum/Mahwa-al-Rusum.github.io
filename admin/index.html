@@ -198,6 +198,8 @@ textarea { resize: vertical; }
       </div>
       <button class="btn" id="new-btn" type="button">New article</button>
       <button class="btn secondary" id="import-btn" type="button">Import document</button>
+      <button class="btn secondary" id="dlall-md" type="button">Download all (.md)</button>
+      <button class="btn secondary" id="dlall-docx" type="button">Download all (Word)</button>
       <input type="file" id="import-file" accept=".docx,.md,.txt,.markdown,text/plain,text/markdown" hidden>
     </div>
     <div id="list-msg"></div>
@@ -284,6 +286,7 @@ textarea { resize: vertical; }
       <button class="btn secondary" id="share-sel" type="button">Share selection</button>
       <button class="btn secondary" id="dl-md" type="button">Download</button>
       <button class="btn secondary" id="dl-docx" type="button">Download Word</button>
+      <button class="btn secondary" id="dl-pdf" type="button">Download PDF (editable)</button>
       <button class="btn secondary" id="upd-btn" type="button">Update from file</button>
       <input type="file" id="upd-file" accept=".docx,.md,.txt,.markdown,text/plain,text/markdown" hidden>
       <span class="hint" id="dirty-note"></span>
@@ -771,7 +774,7 @@ const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; fo
 function zipStored(files) {
   const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
   for (const [name, text] of files) {
-    const nb = enc.encode(name), data = enc.encode(text), crc = CRC(data);
+    const nb = enc.encode(name), data = typeof text === "string" ? enc.encode(text) : text, crc = CRC(data);
     const lh = new DataView(new ArrayBuffer(30)); lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
     lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true); lh.setUint16(26, nb.length, true);
     parts.push(new Uint8Array(lh.buffer), nb, data);
@@ -871,6 +874,36 @@ $("share-sel").onclick = () => {
   const t = $("f-title").value.trim(), url = liveUrl();
   return shareText("“" + sel.replace(/^>\s?/gm, "").replace(/\*\*|\*/g, "") + "”\n— " + t, url, t);
 };
+
+
+/* ---------- download everything; editable PDF ---------- */
+async function downloadAll(kind) {
+  if (!articles.length) return;
+  show("list-msg", "info", "Packing " + articles.length + " articles…");
+  const files = [], seen = new Set();
+  for (const a of articles) {
+    let base = a.name.replace(/\.md$/, ""); while (seen.has(base)) base += "-2"; seen.add(base);
+    if (kind === "md") files.push([base + ".md", serialize(a)]);
+    else files.push([base + ".docx", new Uint8Array(await mdToDocx(a.title, a.body).arrayBuffer())]);
+  }
+  const z = zipStored(files); saveBlob(new Blob([z], { type: "application/zip" }), "mahw-al-rusum-" + (kind === "md" ? "markdown" : "word") + "-" + today() + ".zip");
+  show("list-msg", "ok", "Downloaded " + articles.length + " articles in one zip file (" + (kind === "md" ? ".md" : "Word") + "), drafts included.");
+}
+$("dlall-md").onclick = () => downloadAll("md");
+$("dlall-docx").onclick = () => downloadAll("docx");
+/* "Editable PDF": the browser's own print-to-PDF, so the file has no lock and can be changed in any PDF editor. */
+function printPdf() {
+  const f = formState(), body = mdToHtml(f.body), rtl = (f.body.match(AR) || []).length > f.body.length * .3;
+  const css = '@page{size:A4;margin:20mm 18mm 22mm}body{font:12pt/1.6 Georgia,"Times New Roman",serif;color:#1c2220;margin:0}h1{font-size:21pt;line-height:1.2;margin:0 0 6pt}.meta{font:9.5pt system-ui,sans-serif;color:#5d6661;margin:0 0 16pt}h2,h3{break-after:avoid;margin:16pt 0 6pt}p{margin:0 0 9pt;orphans:3;widows:3}blockquote{margin:0 0 10pt;padding:7pt 11pt;background:#f4f5f1;border-inline-start:2.5pt solid #1e6b5c;break-inside:avoid}blockquote p{margin:0}[dir=rtl]{font-family:"Noto Naskh Arabic","Geeza Pro",serif;line-height:2}blockquote[dir=rtl]{font-size:14pt}.hon{font-family:"Noto Naskh Arabic","Geeza Pro",serif}a{color:inherit;text-decoration:none}';
+  const doc = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(f.title) + '</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;600&display=swap"><style>' + css + '</style></head><body><article' + (rtl ? ' lang="ar" dir="rtl"' : "") + '><h1>' + esc(f.title) + '</h1><p class="meta">' + esc(f.date) + '</p>' + body + '</article></body></html>';
+  const w = window.open("", "_blank");
+  if (!w) { show("ed-msg", "bad", "The browser blocked the new window. Allow pop-ups for this page and try again."); return; }
+  w.document.open(); w.document.write(doc); w.document.close();
+  const go = () => { try { w.focus(); w.print(); } catch (e) {} };
+  (w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve()).then(() => setTimeout(go, 400));
+  show("ed-msg", "info", "In the print window choose “Save as PDF” as the printer, then Save. This PDF is not locked, so you can edit it in any PDF editor.");
+}
+$("dl-pdf").onclick = printPdf;
 
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
