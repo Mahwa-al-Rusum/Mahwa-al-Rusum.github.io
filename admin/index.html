@@ -137,6 +137,7 @@ textarea { resize: vertical; }
 .preview .body blockquote { margin: 0 0 18px; padding: 12px 16px; background: var(--quote-bg); border-inline-start: 3px solid var(--accent); }
 .preview .body blockquote p { margin: 0; }
 .hon { font-family: var(--arabic); font-size: 1.05em; unicode-bidi: isolate; }
+.hon.saw { font-size: 1.3em; line-height: 1; }
 .preview .body [dir="rtl"] { font-family: var(--arabic); font-size: 20px; line-height: 2; }
 .help { font-size: 13.5px; color: var(--ink-muted); margin-top: 10px; }
 .help code { font-size: 13px; background: var(--sunk); border-radius: 3px; padding: 0 4px; }
@@ -329,7 +330,7 @@ mark.chg { background: var(--warn-bg); color: inherit; border-radius: 2px; paddi
             <button type="button" id="dir-btn" title="Typing direction of the box">Direction: auto</button>
           </div>
           <div class="toolbar" aria-label="Honorifics" lang="ar" dir="rtl">
-            <button type="button" data-hon="صلى الله عليه وسلم">ﷺ</button>
+            <button type="button" data-hon="ﷺ">ﷺ</button>
             <button type="button" data-hon="عليه السلام">عليه السلام</button>
             <button type="button" data-hon="رضي الله عنه">رضي الله عنه</button>
             <button type="button" data-hon="رضي الله عنها">رضي الله عنها</button>
@@ -445,13 +446,14 @@ function today() { const d = new Date(); return new Date(d.getTime() - d.getTime
 /* ---------- Markdown preview (JavaScript copy of build.py md(); keep them in step) ---------- */
 const AR = /[؀-ۿ]/g;
 const arAttr = t => ((t.match(AR) || []).length > t.length * 0.3 ? ' lang="ar" dir="rtl"' : "");
-const HONORIFICS = { "\ufdfa": "صلى الله عليه وسلم", "\ufd40": "رحمه الله", "\ufd41": "رضي الله عنه", "\ufd42": "رضي الله عنها", "\ufd43": "رضي الله عنهم" };
+const HONORIFICS = { "\ufd40": "رحمه الله", "\ufd41": "رضي الله عنه", "\ufd42": "رضي الله عنها", "\ufd43": "رضي الله عنهم" };
 const PHRASES = /(صلى الله عليه وسلم|عليهم السلام|عليها السلام|عليه السلام|رضي الله عنهما|رضي الله عنهم|رضي الله عنها|رضي الله عنه|رحمهم الله|رحمه الله|رحمها الله)/g;
 /* The compact honorific symbols (ﷺ ﵀ ﵁) show as empty boxes in many fonts, so they are written out as words. */
 function spellOut(s) { for (const ch in HONORIFICS) s = s.replace(new RegExp("\\s*" + ch, "g"), " " + HONORIFICS[ch]); return s; }
 function inline(s) {
   s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   s = spellOut(s);
+  s = s.replace(/\s*\ufdfa/g, ' <span class="hon saw" lang="ar">\ufdfa</span>');
   if ((s.match(AR) || []).length <= s.length * 0.3) s = s.replace(PHRASES, '<span class="hon" lang="ar" dir="rtl">$1</span>');
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, u) => `<a href="${u.replace(/"/g, "&quot;")}" target="_blank" rel="noopener">${t}</a>`);
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
