@@ -182,6 +182,21 @@ textarea { resize: vertical; }
 .rc-custom textarea { font-family: var(--serif); font-size: 17px; line-height: 1.6; min-height: 8rem; unicode-bidi: plaintext; }
 .rc-gone { margin: 0; }
 mark.chg { background: var(--warn-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
+/* visitors (GoatCounter) */
+.vs-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 12px; margin: 0 0 22px; }
+.tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; min-width: 0; }
+.tile .label { display: block; }
+.tile .n { display: block; font-family: var(--serif); font-size: 32px; font-weight: 600; line-height: 1.15; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.vs-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.vs-table th { text-align: start; font-size: 12.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); padding: 8px 4px; border-bottom: 1px solid var(--rule); }
+.vs-table td { padding: 12px 4px; border-bottom: 1px solid var(--rule); vertical-align: top; overflow-wrap: anywhere; }
+.vs-table .num { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; width: 6rem; }
+.vs-table .vt { font-family: var(--serif); font-size: 17px; line-height: 1.35; }
+.vs-table .vp { display: block; font-size: 12.5px; color: var(--ink-muted); margin-top: 2px; }
+.vs-setup { display: grid; gap: 16px; max-width: 38rem; }
+.vs-note { font-size: 13.5px; color: var(--ink-muted); margin: 18px 0 0; }
+details.vs-more { margin-top: 26px; }
+details.vs-more summary { cursor: pointer; color: var(--accent); font-size: 14px; padding: 6px 0; }
 @media (max-width: 640px) { .rc-choice { grid-template-columns: 1fr; } .rcard { padding: 14px 12px; } }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
@@ -238,6 +253,7 @@ mark.chg { background: var(--warn-bg); color: inherit; border-radius: 2px; paddi
       </div>
       <button class="btn" id="new-btn" type="button">New article</button>
       <button class="btn secondary" id="import-btn" type="button">Import document</button>
+      <button class="btn secondary" id="visitors-btn" type="button">Visitors</button>
       <button class="btn secondary" id="dlall-md" type="button">Download all (.md)</button>
       <button class="btn secondary" id="dlall-docx" type="button">Download all (Word)</button>
       <input type="file" id="import-file" accept=".docx,.md,.txt,.markdown,text/plain,text/markdown" hidden>
@@ -282,6 +298,15 @@ mark.chg { background: var(--warn-bg); color: inherit; border-radius: 2px; paddi
       <button class="btn secondary" id="rv-apply" type="button">Apply my choices to the live article…</button>
       <span class="hint" id="rv-dirty"></span>
     </div>
+  </section>
+
+  <!-- Visitors (GoatCounter) -->
+  <section id="v-visitors" hidden>
+    <div class="ed-top"><button class="linkbtn" id="vs-back" type="button">← All articles</button></div>
+    <p class="kicker">Visitors</p>
+    <h1>How many people read the site</h1>
+    <div id="vs-msg"></div>
+    <div id="vs-body"></div>
   </section>
 
   <!-- Editor -->
@@ -490,7 +515,7 @@ function mdToHtml(text) {
 
 /* ---------- views ---------- */
 function view(name) {
-  ["signin", "list", "editor", "split", "review"].forEach(v => $("v-" + v).hidden = v !== name);
+  ["signin", "list", "editor", "split", "review", "visitors"].forEach(v => $("v-" + v).hidden = v !== name);
   $("signout").hidden = name === "signin";
   window.scrollTo(0, 0);
 }
@@ -1182,6 +1207,234 @@ async function applyToLive() {
 $("rv-save").onclick = saveChoices;
 $("rv-apply").onclick = applyToLive;
 $("review-btn").onclick = () => { const r = current && reviewFor(current.path); if (r) askLeave(() => openReview(r)); };
+
+/* ---------- visitors (GoatCounter: free, no cookies) ----------
+   site.json in the repo holds the GoatCounter code ("goatcounter") and the day counting began ("counting_since").
+   The statistics key stays in this browser ("mr_gc_key") and is sent only to the GoatCounter API.
+   For testing, localStorage "mr_gc_base" replaces the API address (see tools/mock_github.py). */
+const GC_SINCE = "2026-10-27";
+let site = null, siteSha = "", gcKey = "", gcPeriod = "7", gcRunT = 0, gcRunH = 0, gcLast = 0, gcCache = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function loadGcKey() {
+  for (const st of [() => sessionStorage, () => localStorage]) { try { const t = st().getItem("mr_gc_key"); if (t) return t; } catch (e) {} }
+  return "";
+}
+function saveGcKey(k, remember) { try { (remember ? localStorage : sessionStorage).setItem("mr_gc_key", k); } catch (e) {} }
+function clearGcKey() { for (const st of [() => sessionStorage, () => localStorage]) { try { st().removeItem("mr_gc_key"); } catch (e) {} } gcKey = ""; }
+function gcBase() {
+  try { const b = localStorage.getItem("mr_gc_base"); if (b) return b.replace(/\/+$/, ""); } catch (e) {}
+  return `https://${site.goatcounter}.goatcounter.com/api/v0`;
+}
+/* One GoatCounter request; at most about 3 a second (the limit is 4); on "too many requests" wait and try once more. */
+async function gc(path) {
+  for (let tries = 0; ; tries++) {
+    const wait = gcLast + 300 - Date.now(); if (wait > 0) await sleep(wait);
+    gcLast = Date.now();
+    let r;
+    try { r = await fetch(gcBase() + path, { cache: "no-store", headers: { Authorization: "Bearer " + gcKey } }); }
+    catch (e) { const x = new Error("network"); x.status = 0; throw x; }
+    if (r.status === 429 && tries === 0) {
+      const s = parseFloat(r.headers.get("X-Rate-Limit-Reset") || r.headers.get("Retry-After") || "2");
+      await sleep(Math.min(Math.max(isFinite(s) ? s : 2, 1), 10) * 1000); continue;
+    }
+    if (!r.ok) { const e = new Error("GoatCounter " + r.status); e.status = r.status; throw e; }
+    return r.json();
+  }
+}
+function gcExplain(e) {
+  if (e.status === 401 || e.status === 403) return "GoatCounter did not accept the statistics key. It may be mistyped, deleted, or not allowed to read statistics. Make a new key and paste it below.";
+  if (e.status === 404) return `GoatCounter has no site with the code “${site.goatcounter}”. Check the code (it is the first part of your GoatCounter address).`;
+  if (e.status === 429) return "GoatCounter is receiving too many requests right now. Wait a minute, then press Refresh.";
+  if (!e.status) return "Could not reach GoatCounter. Check your internet connection and try again.";
+  return `GoatCounter refused the request (error ${e.status}). Try again in a few minutes.`;
+}
+const gcCodeOf = s => { s = String(s || "").trim().toLowerCase(); const m = s.match(/^(?:https?:\/\/)?([a-z0-9-]+)\.goatcounter\.com/); return m ? m[1] : s; };
+const validCode = c => /^[a-z0-9][a-z0-9-]{0,62}$/.test(c);
+const nf = n => Number(n || 0).toLocaleString("en-GB");
+const isoZ = d => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+function hourDown(d) { const x = new Date(d); x.setUTCMinutes(0, 0, 0); return x; }
+const sinceDate = () => (/^\d{4}-\d{2}-\d{2}$/.test(site.counting_since || "") ? site.counting_since : GC_SINCE);
+const longDate = d => { const t = new Date(d + "T12:00:00"); return isNaN(t) ? d : t.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); };
+function range(p) {
+  const now = new Date(), end = hourDown(now); end.setUTCHours(end.getUTCHours() + 1);   // to the end of this hour
+  let start;
+  if (p === "today") { start = new Date(now); start.setHours(0, 0, 0, 0); }
+  else if (p === "7" || p === "30") start = new Date(now.getTime() - (+p) * 864e5);
+  else start = new Date(sinceDate() + "T00:00:00");
+  return "start=" + encodeURIComponent(isoZ(hourDown(start))) + "&end=" + encodeURIComponent(isoZ(end));
+}
+
+async function loadSite() {
+  try { const j = await gh(repoPath("site.json") + "?ref=" + BRANCH); site = JSON.parse(b64decode(j.content)); siteSha = j.sha; }
+  catch (e) { if (e.status !== 404) throw e; site = {}; siteSha = ""; }
+  site.goatcounter = gcCodeOf(site.goatcounter);
+}
+async function openVisitors() {
+  view("visitors"); gcCache = {};
+  $("vs-body").innerHTML = ""; show("vs-msg", "info", "Loading…");
+  try { await loadSite(); } catch (e) { if (e.status === 401) return signOut(explain(e, "loading")); return show("vs-msg", "bad", explain(e, "loading the settings")); }
+  show("vs-msg", "", "");
+  gcKey = loadGcKey();
+  renderVisitors();
+}
+function renderVisitors() {
+  if (!site.goatcounter) return renderSetup();
+  if (!gcKey) return renderKey();
+  renderStats();
+}
+const codeForm = (label, btn) => `
+  <form class="vs-setup" id="vs-code-form" novalidate>
+    <div class="field"><label for="vs-code">${label}</label>
+      <input id="vs-code" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="for example: mahw-al-rusum" value="${esc(site.goatcounter || "")}"></div>
+    <div class="row"><button class="btn" type="submit" id="vs-code-save">${btn}</button></div>
+  </form>`;
+function wireCodeForm() {
+  $("vs-code-form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const code = gcCodeOf($("vs-code").value);
+    if (!validCode(code)) { show("vs-msg", "bad", "The code can only have small letters, numbers and hyphens, for example mahw-al-rusum."); $("vs-code").focus(); return; }
+    const btn = $("vs-code-save"); btn.disabled = true; show("vs-msg", "info", "Saving…");
+    const next = { ...site, goatcounter: code, counting_since: code === site.goatcounter && site.counting_since ? site.counting_since : today() };
+    try {
+      const res = await gh(repoPath("site.json"), { method: "PUT", body: JSON.stringify({ message: "Visitor counting: GoatCounter code " + code,
+        content: b64encode(JSON.stringify(next, null, 2) + "\n"), branch: BRANCH, ...(siteSha ? { sha: siteSha } : {}) }) });
+      if (code !== site.goatcounter) clearGcKey();          // a key belongs to one GoatCounter site
+      site = next; siteSha = res.content.sha; gcCache = {};
+      renderVisitors();
+      show("vs-msg", "ok", `Saved. Counting starts in about a minute, when the site has rebuilt. Visits are counted from today, ${longDate(site.counting_since)}.`);
+    } catch (e) { btn.disabled = false; show("vs-msg", "bad", explain(e, "saving the code")); }
+  });
+}
+function renderSetup() {
+  $("vs-body").innerHTML = `
+    <div class="panel vs-setup">
+      <p style="margin:0"><b>Counting is not switched on yet.</b> It uses GoatCounter: free, no cookies, and no cookie banner needed.</p>
+      <ol class="steps">
+        <li><a href="https://www.goatcounter.com/signup" target="_blank" rel="noopener">Open GoatCounter's sign-up page</a>.</li>
+        <li>Choose a short <b>code</b>, for example <b>mahw-al-rusum</b>. It becomes your address: <i>code</i>.goatcounter.com.</li>
+        <li>Fill in your email and a password, and finish signing up.</li>
+        <li>Then either tell Claude the code, or type it here and press <b>Switch on counting</b>.</li>
+      </ol>
+      ${codeForm("Your GoatCounter code", "Switch on counting")}
+    </div>`;
+  wireCodeForm();
+}
+function renderKey(msg) {
+  const keyUrl = `https://${site.goatcounter}.goatcounter.com/user/api`;
+  $("vs-body").innerHTML = `
+    <div class="panel vs-setup">
+      <p style="margin:0">Counting is on for <b>${esc(site.goatcounter)}.goatcounter.com</b> since ${esc(longDate(sinceDate()))}. To see the numbers here, this device needs a GoatCounter statistics key.</p>
+      <ol class="steps">
+        <li><a href="${esc(keyUrl)}" target="_blank" rel="noopener">Open your GoatCounter key page</a> (sign in to GoatCounter if asked).</li>
+        <li>Create a new key that can <b>read statistics</b>, save it, and copy it.</li>
+        <li>Paste it below.</li>
+      </ol>
+      <form class="vs-setup" id="vs-key-form" novalidate>
+        <div class="field"><label for="vs-key">GoatCounter statistics key</label>
+          <input id="vs-key" type="password" autocomplete="off" spellcheck="false"></div>
+        <label class="check"><input id="vs-remember" type="checkbox" checked> Remember on this device</label>
+        <div class="row"><button class="btn" type="submit" id="vs-key-save">Show visitors</button></div>
+        <p class="hint" style="margin:0">The key stays in this browser and is sent only to GoatCounter.</p>
+      </form>
+    </div>
+    <details class="vs-more"><summary>Wrong code? Change it</summary>${codeForm("GoatCounter code", "Save the code")}</details>`;
+  if (msg) show("vs-msg", "bad", msg);
+  wireCodeForm();
+  $("vs-key-form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const k = $("vs-key").value.trim();
+    if (!k) { show("vs-msg", "bad", "Paste the key first."); $("vs-key").focus(); return; }
+    const btn = $("vs-key-save"); btn.disabled = true; show("vs-msg", "info", "Checking the key…");
+    gcKey = k;
+    try { await gc("/stats/total?" + range("today")); }
+    catch (e) { gcKey = ""; btn.disabled = false; return show("vs-msg", "bad", gcExplain(e)); }
+    saveGcKey(k, $("vs-remember").checked);
+    show("vs-msg", "", ""); renderStats();
+  });
+}
+function renderStats() {
+  const since = longDate(sinceDate());
+  const P = [["7", "Last 7 days"], ["30", "Last 30 days"], ["all", "Since " + since]];
+  $("vs-body").innerHTML = `
+    <div class="vs-tiles">
+      <div class="tile"><span class="label">Today</span><span class="n" id="t-today">…</span></div>
+      <div class="tile"><span class="label">Last 7 days</span><span class="n" id="t-7">…</span></div>
+      <div class="tile"><span class="label">Last 30 days</span><span class="n" id="t-30">…</span></div>
+      <div class="tile"><span class="label">Since ${esc(since)}</span><span class="n" id="t-all">…</span></div>
+    </div>
+    <p class="vs-note" style="margin-top:0">Counting began on ${esc(since)}; visits before that day are not known. A visitor is one person reading one page; the same person coming back to it soon after is usually counted once. Some readers use ad blockers, which hide their visits, so the real numbers are a little higher.</p>
+    <div class="row" style="margin:14px 0 26px">
+      <button class="btn secondary" id="vs-refresh" type="button">Refresh</button>
+      <button class="btn danger" id="vs-forget" type="button">Forget the key</button>
+      <a href="https://${esc(site.goatcounter)}.goatcounter.com" target="_blank" rel="noopener" style="font-size:14px">Open GoatCounter</a>
+    </div>
+    <h2 style="font-family:var(--serif);margin:0 0 4px">Visitors per article</h2>
+    <div class="rv-filters" id="vs-periods" role="group" aria-label="Period">${P.map(([k, l]) => `<button type="button" data-p="${k}" aria-pressed="${k === gcPeriod}">${esc(l)}</button>`).join("")}</div>
+    <div id="vs-table"></div>
+    <details class="vs-more"><summary>Wrong code? Change it</summary>${codeForm("GoatCounter code", "Save the code")}</details>`;
+  wireCodeForm();
+  $("vs-periods").addEventListener("click", ev => { const b = ev.target.closest("button[data-p]"); if (!b) return; gcPeriod = b.dataset.p;
+    $("vs-periods").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); loadTable(); });
+  $("vs-refresh").onclick = () => { gcCache = {}; show("vs-msg", "", ""); renderStats(); };
+  $("vs-forget").onclick = () => { clearGcKey(); gcCache = {}; renderKey(); show("vs-msg", "ok", "The key is forgotten on this device."); };
+  loadStats();
+}
+async function loadStats() {
+  const run = ++gcRunT;
+  try {
+    for (const p of ["today", "7", "30", "all"]) {
+      const j = gcCache["t" + p] || (gcCache["t" + p] = await gc("/stats/total?" + range(p)));
+      if (run !== gcRunT) return;
+      const el = $("t-" + p); if (el) el.textContent = nf(j.total);
+    }
+  } catch (e) { return statsFailed(e, run !== gcRunT); }
+  loadTable();
+}
+function statsFailed(e, stale) {
+  if (stale || $("v-visitors").hidden || !$("vs-table")) return;
+  if (e.status === 401 || e.status === 403) { clearGcKey(); return renderKey(gcExplain(e)); }
+  show("vs-msg", "bad", gcExplain(e));
+  document.querySelectorAll(".tile .n").forEach(n => { if (n.textContent === "…") n.textContent = "–"; });
+  const t = $("vs-table"); if (t && /Loading/.test(t.textContent)) t.innerHTML = "";
+}
+function pageName(path) {
+  const p = String(path || "");
+  if (p === "/" || p === "" || p === "/index.html") return { key: "/", title: "Home page" };
+  const m = p.match(/^\/a\/([^/?#]+)\/?$/);
+  if (m) { const a = articles.find(x => slugOf(x.name) === m[1].toLowerCase()); if (a) return { key: "/a/" + slugOf(a.name) + "/", title: a.title || "(no title)" }; }
+  return { key: p, title: p, raw: true };
+}
+async function loadTable() {
+  const run = ++gcRunH, p = gcPeriod, box = $("vs-table");
+  box.innerHTML = `<p class="hint">Loading…</p>`;
+  let res = gcCache["h" + p];
+  if (!res) {
+    try {
+      const rows = [], skip = []; let more = false;
+      for (let page = 0; page < 5; page++) {
+        const j = await gc("/stats/hits?" + range(p) + "&limit=100" + (skip.length ? "&exclude_paths=" + skip.join(",") : ""));
+        if (run !== gcRunH) return;
+        const hits = j.hits || [];
+        hits.forEach(h => { rows.push(h); skip.push(h.path_id); });
+        more = !!j.more && hits.length > 0;
+        if (!more) break;
+      }
+      res = gcCache["h" + p] = { rows, more };
+    } catch (e) { return statsFailed(e, run !== gcRunH); }
+  }
+  if (run !== gcRunH || !$("vs-table")) return;
+  const merged = new Map();                      // "/a/x" and "/a/x/" are the same page
+  res.rows.forEach(h => { const n = pageName(h.path);
+    const r = merged.get(n.key) || { ...n, count: 0 }; r.count += h.count || 0; merged.set(n.key, r); });
+  const list = [...merged.values()].sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+  box.innerHTML = list.length ? `
+    <table class="vs-table"><thead><tr><th scope="col">Page</th><th scope="col" class="num">Visitors</th></tr></thead><tbody>
+    ${list.map(r => `<tr><td><span class="vt" dir="auto">${esc(r.title)}</span>${r.raw ? "" : `<span class="vp">${esc(r.key)}</span>`}</td><td class="num">${nf(r.count)}</td></tr>`).join("")}
+    </tbody></table>${res.more ? `<p class="hint">Showing the ${nf(res.rows.length)} most visited pages.</p>` : ""}`
+    : `<p class="empty">No visits counted in this period yet.</p>`;
+}
+$("visitors-btn").onclick = openVisitors;
+$("vs-back").onclick = () => { show("vs-msg", "", ""); view("list"); renderList(); };
 
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
