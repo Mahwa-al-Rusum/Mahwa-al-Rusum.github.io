@@ -143,6 +143,45 @@ textarea { resize: vertical; }
 .savebar { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--rule); padding-block: 12px; margin-top: 22px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .savebar .spacer { flex: 1; }
 .confirm { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 8px; background: var(--bad-bg); color: var(--bad); font-size: 14.5px; }
+/* review the corrections */
+.review-cta { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 14px 16px; margin: 0 0 18px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+.review-cta .hint { color: var(--ink); }
+.rv-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.rv-filters button { font: 600 14px var(--sans); background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 999px; padding: 8px 14px; cursor: pointer; min-height: 40px; }
+.rv-filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.rv-cards { display: grid; gap: 16px; margin-top: 16px; }
+.rcard { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.rc-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rc-id { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.pill.sev-error { background: var(--bad-bg); color: var(--bad); }
+.pill.sev-doubtful { background: var(--warn-bg); color: var(--warn); }
+.pill.sev-style { background: var(--accent-soft); color: var(--accent); }
+.pill.sev-addition { background: var(--ok-bg); color: var(--ok); }
+.rc-why { margin: 0; font-size: 14.5px; }
+.rc-block { border-radius: 8px; padding: 10px 14px; border-inline-start: 4px solid; }
+.rc-block > .label { display: block; margin-bottom: 4px; }
+.rc-old { background: var(--bad-bg); border-color: var(--bad); }
+.rc-old > .label { color: var(--bad); }
+.rc-new { background: var(--ok-bg); border-color: var(--ok); }
+.rc-new > .label { color: var(--ok); }
+.rc-text { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink); }
+.rc-text p, .rc-text ul, .rc-text ol { margin: 0 0 8px; }
+.rc-text > :last-child { margin-bottom: 0; }
+.rc-text blockquote { margin: 0 0 8px; padding: 6px 12px; border-inline-start: 3px solid var(--rule); }
+.rc-text blockquote p { margin: 0; }
+.rc-text [dir="rtl"]:not(.hon) { font-family: var(--arabic); font-size: 19px; line-height: 2; }
+.rcard[data-choice="original"] .rc-new, .rcard[data-choice="custom"] .rc-new, .rcard[data-choice="new"] .rc-old, .rcard[data-choice="custom"] .rc-old { opacity: .6; }
+.rc-raw summary { font-size: 13.5px; color: var(--accent); cursor: pointer; padding: 4px 0; }
+.rc-raw pre { white-space: pre-wrap; font: 13.5px/1.5 ui-monospace, Menlo, monospace; background: var(--sunk); border-radius: 8px; padding: 8px 10px; margin: 6px 0; unicode-bidi: plaintext; }
+.rc-choice { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.rc-choice legend { margin-bottom: 6px; padding: 0; }
+.rc-choice label { display: flex; gap: 8px; align-items: center; padding: 10px 12px; min-height: 44px; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14.5px; }
+.rc-choice input { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.rc-choice label:has(input:checked) { border: 2px solid var(--accent); background: var(--accent-soft); }
+.rc-custom textarea { font-family: var(--serif); font-size: 17px; line-height: 1.6; min-height: 8rem; unicode-bidi: plaintext; }
+.rc-gone { margin: 0; }
+mark.chg { background: var(--warn-bg); color: inherit; border-radius: 2px; padding: 0 1px; }
+@media (max-width: 640px) { .rc-choice { grid-template-columns: 1fr; } .rcard { padding: 14px 12px; } }
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
   h1 { font-size: 26px; }
@@ -220,11 +259,39 @@ textarea { resize: vertical; }
     <div class="row"><button class="btn" id="split-go" type="button">Split and save</button></div>
   </section>
 
+  <!-- Review the corrections -->
+  <section id="v-review" hidden>
+    <div class="ed-top"><button class="linkbtn" id="rv-back" type="button">← Back to the article</button></div>
+    <p class="kicker">Review the corrections</p>
+    <h1 id="rv-title" dir="auto"></h1>
+    <p class="help" style="margin-top:0">For each proposed change, choose <b>Use correction</b>, <b>Keep original</b> or <b>My own edit</b>. Nothing on the public site changes until you apply your choices and press Save in the article.</p>
+    <p class="counts" id="rv-counts"></p>
+    <p class="counts" id="rv-chosen"></p>
+    <div id="rv-msg"></div>
+    <div class="rv-filters" id="rv-filters" aria-label="Show changes of this grade"></div>
+    <div class="row">
+      <button class="btn secondary" id="rv-all-new" type="button">Use all corrections</button>
+      <button class="btn secondary" id="rv-all-old" type="button">Keep all originals</button>
+      <button class="btn secondary" id="rv-prev-btn" type="button" aria-pressed="false">Preview the whole article</button>
+    </div>
+    <div id="rv-preview" class="preview" style="margin-top:16px" hidden></div>
+    <div class="rv-cards" id="rv-cards"></div>
+    <div class="savebar">
+      <button class="btn" id="rv-save" type="button">Save my choices</button>
+      <button class="btn secondary" id="rv-apply" type="button">Apply my choices to the live article…</button>
+      <span class="hint" id="rv-dirty"></span>
+    </div>
+  </section>
+
   <!-- Editor -->
   <section id="v-editor" hidden>
     <div class="ed-top">
       <button class="linkbtn" id="back-btn" type="button">← All articles</button>
       <a id="view-link" target="_blank" rel="noopener" hidden>View on the site</a>
+    </div>
+    <div class="review-cta" id="review-slot" hidden>
+      <button class="btn" id="review-btn" type="button">Review the corrections</button>
+      <span class="hint" id="review-hint"></span>
     </div>
     <div id="ed-msg"></div>
     <div class="grid">
@@ -421,7 +488,7 @@ function mdToHtml(text) {
 
 /* ---------- views ---------- */
 function view(name) {
-  ["signin", "list", "editor", "split"].forEach(v => $("v-" + v).hidden = v !== name);
+  ["signin", "list", "editor", "split", "review"].forEach(v => $("v-" + v).hidden = v !== name);
   $("signout").hidden = name === "signin";
   window.scrollTo(0, 0);
 }
@@ -446,6 +513,7 @@ async function loadList() {
       return { name: f.name, path: f.path, sha: j.sha, ...parse(b64decode(j.content)) };
     }));
     articles.sort((a, b) => sortKey(b).localeCompare(sortKey(a)) || a.title.localeCompare(b.title));
+    await loadReviews();
     show("list-msg", "", "");
     renderList();
   } catch (e) {
@@ -460,8 +528,8 @@ function renderList() {
   $("items").innerHTML = articles.length ? articles.map((a, i) => `
     <li class="item"><button type="button" class="open" data-i="${i}">
       <span class="t" dir="auto">${esc(a.title || "(no title)")}</span>
-      <span class="meta">${esc(a.date)}${a.time ? " · " + esc(a.time) : ""}</span>
-      <span class="pill ${a.published ? "pub" : "draft"}">${a.published ? "Published" : "Hidden draft"}</span>
+      <span class="meta">${esc(a.date)}${a.time ? " · " + esc(a.time) : ""}${reviews.some(r => r.data.original === a.path) ? " · corrections to review" : ""}</span>
+      <span class="pill ${a.published ? "pub" : "draft"}">${isReviewCopy(a.path) ? "Review copy" : a.published ? "Published" : "Hidden draft"}</span>
     </button>
     <span class="mv"><button type="button" class="mvbtn" data-mv="up" data-i="${i}" aria-label="Move newer: ${esc(a.title)}" ${i === 0 ? "disabled" : ""}>↑ Newer</button><button type="button" class="mvbtn" data-mv="down" data-i="${i}" aria-label="Move older: ${esc(a.title)}" ${i === articles.length - 1 ? "disabled" : ""}>↓ Older</button></span></li>`).join("") : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
 }
@@ -502,6 +570,14 @@ function openEditor(a) {
   $("confirm-slot").innerHTML = "";
   $("del-btn").hidden = !current.path;
   show("ed-msg", "", "");
+  const rev = reviewFor(current.path);
+  $("review-slot").hidden = !rev;
+  if (rev) {
+    const n = rev.data.changes.length, copy = rev.data.copy === current.path;
+    $("review-btn").textContent = `Review the corrections (${n})`;
+    $("review-hint").textContent = copy ? "This is the hidden review copy (all corrections put in). Never publish it. Open the corrections to choose, then apply them to the live article."
+                                        : `${n} proposed correction${n === 1 ? " is" : "s are"} waiting for this article. Open them to choose which to use.`;
+  }
   setTab("write");
   setDirty(false);
   updateSwitch();
@@ -539,6 +615,7 @@ async function save() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test($("f-date").value)) { show("ed-msg", "bad", "Choose a date before saving."); $("f-date").focus(); return; }
   const a = { ...current, title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value, time: $("f-time").value,
               published: $("f-published").checked, body: $("f-body").value };
+  if (a.published && isReviewCopy(a.path)) { show("ed-msg", "bad", "This is a review copy. It must stay a hidden draft: switch Published off. To change the live article, use Review the corrections, then Apply."); return; }
   const isNew = !a.path;
   if (isNew) { a.name = newFileName(a.title, a.date); a.path = DIR + "/" + a.name; }
   $("save-btn").disabled = true; $("save-btn").textContent = "Saving…";
@@ -905,6 +982,205 @@ function printPdf() {
 }
 $("dl-pdf").onclick = printPdf;
 
+/* ---------- review the corrections (files in reviews/, made by tools/make_review.py) ---------- */
+/* reviews/<article>.json = { original, copy, title, created, changes: [{ id, severity, kind, old, new, reason, choice: new|original|custom, custom }] }.
+   The copy article (hidden, never published) = the live original with the chosen replacements. */
+let reviews = [], rv = null;
+const SEV = { error: ["Error", "errors"], doubtful: ["Doubtful", "doubtful"], style: ["Style", "style"], addition: ["Addition", "additions"] };
+const sevLabel = s => (SEV[s] || [s || "Other"])[0];
+const M0 = "", M1 = "";
+async function loadReviews() {
+  reviews = [];
+  let files;
+  try { files = await gh(repoPath("reviews") + "?ref=" + BRANCH); } catch (e) { return; }   // no reviews folder: nothing to review
+  if (!Array.isArray(files)) return;
+  reviews = (await Promise.all(files.filter(f => f.type === "file" && f.name.endsWith(".json")).map(async f => {
+    try { const j = await gh(repoPath(f.path) + "?ref=" + BRANCH); return { path: f.path, sha: j.sha, data: JSON.parse(b64decode(j.content)) }; }
+    catch (e) { return null; }
+  }))).filter(r => r && r.data && Array.isArray(r.data.changes) && r.data.original);
+}
+const reviewFor = path => path ? reviews.find(r => r.data.original === path || r.data.copy === path) : null;
+const isReviewCopy = path => !!path && (/-review-copy-/.test(path) || reviews.some(r => r.data.copy === path));
+async function fetchArticle(path) {
+  const j = await gh(repoPath(path) + "?ref=" + BRANCH);
+  return { name: path.split("/").pop(), path, sha: j.sha, ...parse(b64decode(j.content)) };
+}
+/* Mark a replacement for the preview, line by line, after any Markdown line prefix (#, >, -, 1.) so the block types still work. */
+function markText(t, atLineStart) {
+  return t.split("\n").map((seg, i) => {
+    if (!seg.trim() || /^\s*(-{3,}|\*{3,})\s*$/.test(seg)) return seg;
+    const pre = (i > 0 || atLineStart) ? /^\s*(#{1,3}\s+|>[> ]*|[-*]\s+|\d+[.)]\s+)?/.exec(seg)[0] : "";
+    return pre + M0 + seg.slice(pre.length) + M1;
+  }).join("\n");
+}
+/* Find every chosen passage in the untouched body (exactly once, not overlapping one taken earlier in the stored order), then replace by position. */
+function applyChoices(body, changes, mark) {
+  const kept = [], failed = [];
+  for (const c of changes) {
+    if (c.choice === "original") continue;
+    const at = c.old ? body.indexOf(c.old) : -1;
+    if (at < 0 || body.indexOf(c.old, at + 1) >= 0) { failed.push(c); continue; }
+    const sp = { s: at, e: at + c.old.length, rep: c.choice === "custom" ? c.custom : c.new, c };
+    if (kept.some(k => sp.s < k.e && k.s < sp.e)) { failed.push(c); continue; }
+    kept.push(sp);
+  }
+  kept.sort((a, b) => a.s - b.s);
+  let out = "", pos = 0;
+  for (const sp of kept) { out += body.slice(pos, sp.s) + (mark ? markText(sp.rep, sp.s === 0 || body[sp.s - 1] === "\n") : sp.rep); pos = sp.e; }
+  return { text: out + body.slice(pos), failed, applied: kept.length };
+}
+const foundOnce = (body, old) => { const at = body.indexOf(old); return at >= 0 && body.indexOf(old, at + 1) < 0; };
+function failedText(list) {
+  if (!list.length) return "";
+  return ` ${list.length} change${list.length === 1 ? "" : "s"} could not be applied (the article changed) and ${list.length === 1 ? "was" : "were"} left out: ` +
+    list.map(c => c.id + " (“" + c.old.replace(/\s+/g, " ").slice(0, 50) + (c.old.length > 50 ? "…" : "") + "”)").join("; ") + ".";
+}
+function setRvDirty(d) { if (rv) rv.dirty = d; $("rv-dirty").textContent = d ? "Choices not saved yet" : ""; }
+
+async function openReview(r) {
+  rv = { rec: r, data: JSON.parse(JSON.stringify(r.data)), base: null, filter: "all", preview: false, dirty: false };
+  $("rv-title").textContent = r.data.title || r.data.original;
+  $("rv-preview").hidden = true; $("rv-prev-btn").setAttribute("aria-pressed", "false"); $("rv-prev-btn").textContent = "Preview the whole article";
+  setRvDirty(false);
+  view("review");
+  show("rv-msg", "info", "Loading the live article and the corrections…");
+  renderReview();
+  try {
+    const [j, base] = await Promise.all([gh(repoPath(r.path) + "?ref=" + BRANCH), fetchArticle(r.data.original)]);
+    r.sha = j.sha; r.data = JSON.parse(b64decode(j.content));
+    rv.data = JSON.parse(JSON.stringify(r.data)); rv.base = base;
+    const gone = rv.data.changes.filter(c => !foundOnce(base.body, c.old));
+    show("rv-msg", gone.length ? "bad" : "", gone.length ? `${gone.length} of the original passages are no longer in the live article exactly as written (the article changed since the corrections were made). Those changes are marked below and cannot be applied.` : "");
+  } catch (e) { show("rv-msg", "bad", explain(e, "loading the corrections")); }
+  renderReview();
+}
+function rvCounts() {
+  const ch = rv.data.changes, by = {}, choice = { new: 0, original: 0, custom: 0 };
+  ch.forEach(c => { by[c.severity] = (by[c.severity] || 0) + 1; choice[c.choice] = (choice[c.choice] || 0) + 1; });
+  const parts = Object.keys(SEV).filter(k => by[k]).map(k => `${by[k]} ${by[k] === 1 ? SEV[k][1].replace(/s$/, "") : SEV[k][1]}`);
+  Object.keys(by).filter(k => !SEV[k]).forEach(k => parts.push(`${by[k]} ${k}`));
+  $("rv-counts").textContent = `${ch.length} change${ch.length === 1 ? "" : "s"}: ${parts.join(", ")}`;
+  $("rv-chosen").textContent = `Your choices: ${choice.new} use the correction · ${choice.original} keep the original · ${choice.custom} my own edit`;
+  return by;
+}
+function rvShown() { return rv.data.changes.filter(c => rv.filter === "all" || c.severity === rv.filter); }
+function renderReview() {
+  if (!rv) return;
+  const by = rvCounts(), n = rv.data.changes.length;
+  $("rv-filters").innerHTML = [["all", "All", n], ...Object.keys(SEV).filter(k => by[k]).map(k => [k, SEV[k][1][0].toUpperCase() + SEV[k][1].slice(1), by[k]])]
+    .map(([k, l, c]) => `<button type="button" data-f="${k}" aria-pressed="${rv.filter === k}">${esc(l)} (${c})</button>`).join("");
+  const shown = rvShown(), sub = rv.filter === "all" ? "" : ` (the ${shown.length} shown)`;
+  $("rv-all-new").textContent = "Use all corrections" + sub; $("rv-all-old").textContent = "Keep all originals" + sub;
+  const base = rv.base ? rv.base.body : null;
+  $("rv-cards").innerHTML = shown.map(c => {
+    const id = esc(c.id), gone = base !== null && !foundOnce(base, c.old);
+    const radio = (v, l) => `<label><input type="radio" name="ch-${id}" value="${v}" ${c.choice === v ? "checked" : ""}> ${l}</label>`;
+    return `<article class="rcard" data-id="${id}" data-choice="${esc(c.choice)}">
+      <div class="rc-head"><span class="pill sev-${esc(c.severity)}">${esc(sevLabel(c.severity))}</span><span class="rc-id">${id}${c.kind && c.kind !== c.severity ? " · " + esc(c.kind) : ""}</span></div>
+      <p class="rc-why"><span class="label">Why, and the source</span><br><span dir="auto">${inline(c.reason || "")}</span></p>
+      <div class="rc-block rc-old"><span class="label">Original</span><div class="rc-text" dir="auto">${mdToHtml(c.old)}</div></div>
+      <div class="rc-block rc-new"><span class="label">${c.severity === "addition" ? "Correction (adds text)" : "Correction"}</span><div class="rc-text" dir="auto">${mdToHtml(c.new) || "<p><i>(the passage is removed)</i></p>"}</div></div>
+      <details class="rc-raw"><summary>Show the raw text</summary><span class="label">Original</span><pre dir="auto">${esc(c.old)}</pre><span class="label">Correction</span><pre dir="auto">${esc(c.new)}</pre></details>
+      ${gone ? `<p class="msg bad rc-gone">This original passage is no longer in the live article exactly once (the article changed), so this change cannot be applied.</p>` : ""}
+      <fieldset class="rc-choice"><legend class="label">Your choice</legend>${radio("new", "Use correction")}${radio("original", "Keep original")}${radio("custom", "My own edit")}</fieldset>
+      <div class="rc-custom field" ${c.choice === "custom" ? "" : "hidden"}><label class="label" for="cu-${id}">My own edit</label>
+        <textarea id="cu-${id}" data-id="${id}" dir="auto" rows="6">${esc(c.choice === "custom" ? c.custom : (c.custom || c.new))}</textarea>
+        <span class="hint">This text replaces the original passage. It starts as the correction; change it as you like. An empty box removes the passage.</span></div>
+    </article>`;
+  }).join("") || `<p class="empty">No changes of this grade.</p>`;
+  if (rv.preview) renderRvPreview();
+}
+function renderRvPreview() {
+  if (!rv.base) { $("rv-preview").innerHTML = `<p class="hint">The live article is not loaded yet.</p>`; return; }
+  const res = applyChoices(rv.base.body, rv.data.changes, true);
+  $("rv-preview").innerHTML = `<p class="hint">Changed passages are highlighted.${esc(failedText(res.failed))}</p><h2 class="p-title" dir="auto">${esc(rv.base.title)}</h2><div class="body">` +
+    mdToHtml(res.text).replace(//g, '<mark class="chg">').replace(//g, "</mark>") + "</div>";
+}
+function rvChange(c, choice) {
+  c.choice = choice;
+  if (choice === "custom" && !c.custom) c.custom = c.new;
+  const card = $("rv-cards").querySelector(`.rcard[data-id="${CSS.escape(c.id)}"]`);
+  if (card) {
+    card.dataset.choice = choice;
+    card.querySelectorAll(`input[type=radio]`).forEach(x => { x.checked = x.value === choice; });
+    const box = card.querySelector(".rc-custom"); box.hidden = choice !== "custom";
+    if (choice === "custom") box.querySelector("textarea").value = c.custom;
+  }
+}
+$("rv-cards").addEventListener("change", ev => {
+  const x = ev.target; if (x.type !== "radio") return;
+  const c = rv.data.changes.find(k => k.id === x.closest(".rcard").dataset.id); if (!c) return;
+  rvChange(c, x.value); rvCounts(); setRvDirty(true);
+  if (rv.preview) renderRvPreview();
+  if (x.value === "custom") x.closest(".rcard").querySelector("textarea").focus();
+});
+$("rv-cards").addEventListener("input", ev => {
+  const t = ev.target; if (t.tagName !== "TEXTAREA") return;
+  const c = rv.data.changes.find(k => k.id === t.dataset.id); if (!c) return;
+  c.custom = t.value; setRvDirty(true);
+});
+$("rv-filters").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; rv.filter = b.dataset.f; renderReview(); });
+$("rv-all-new").onclick = () => { rvShown().forEach(c => rvChange(c, "new")); rvCounts(); setRvDirty(true); if (rv.preview) renderRvPreview(); };
+$("rv-all-old").onclick = () => { rvShown().forEach(c => rvChange(c, "original")); rvCounts(); setRvDirty(true); if (rv.preview) renderRvPreview(); };
+$("rv-prev-btn").onclick = () => {
+  rv.preview = !rv.preview;
+  $("rv-prev-btn").setAttribute("aria-pressed", rv.preview); $("rv-prev-btn").textContent = rv.preview ? "Back to the list of changes" : "Preview the whole article";
+  $("rv-preview").hidden = !rv.preview; $("rv-cards").hidden = rv.preview;
+  if (rv.preview) renderRvPreview();
+};
+$("rv-back").onclick = () => { if (rv && rv.dirty && !confirm("Your choices are not saved. Leave without saving them?")) return; setRvDirty(false); view("editor"); };
+
+async function saveChoices() {
+  const btn = $("rv-save"); btn.disabled = true; btn.textContent = "Saving…";
+  show("rv-msg", "info", "Saving your choices…");
+  try {
+    const live = await fetchArticle(rv.data.original); rv.base = live;
+    const res = applyChoices(live.body, rv.data.changes, false), title = rv.data.title || live.title;
+    const r1 = await gh(repoPath(rv.rec.path), { method: "PUT", body: JSON.stringify({ message: "Review choices: " + title,
+      content: b64encode(JSON.stringify(rv.data, null, 2) + "\n"), branch: BRANCH, sha: rv.rec.sha }) });
+    rv.rec.sha = r1.content.sha; rv.rec.data = JSON.parse(JSON.stringify(rv.data));
+    let old = null;
+    try { old = await fetchArticle(rv.data.copy); } catch (e) { if (e.status !== 404) throw e; }
+    const now = new Date(), hhmm = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    const copy = { name: rv.data.copy.split("/").pop(), path: rv.data.copy, sha: old ? old.sha : "", title: "Review copy: " + title,
+      date: old ? old.date : today(), time: old ? old.time : hhmm, published: false, body: res.text,
+      summary: (old && old.summary) || "The corrected copy of this article for review in the admin page. Hidden; never publish it." };
+    const r2 = await gh(repoPath(copy.path), { method: "PUT", body: JSON.stringify({ message: "Review copy: " + title + " (hidden)",
+      content: b64encode(serialize(copy)), branch: BRANCH, ...(copy.sha ? { sha: copy.sha } : {}) }) });
+    copy.sha = r2.content.sha;
+    const i = articles.findIndex(a => a.path === copy.path); if (i >= 0) articles[i] = copy; else articles.unshift(copy);
+    const j = articles.findIndex(a => a.path === live.path); if (j >= 0) articles[j] = live;
+    if (current && current.path === copy.path && !dirty) openEditor(copy), view("review");
+    setRvDirty(false);
+    show("rv-msg", res.failed.length ? "bad" : "ok", "Saved. The hidden review copy now shows your choices. The live article has not changed." + failedText(res.failed));
+    renderReview();
+    $("rv-msg").scrollIntoView({ block: "nearest" });
+    return true;
+  } catch (e) {
+    show("rv-msg", "bad", "Your choices were not saved. " + explain(e, "saving your choices"));
+    return false;
+  } finally { btn.disabled = false; btn.textContent = "Save my choices"; }
+}
+async function applyToLive() {
+  const by = { new: 0, original: 0, custom: 0 }; rv.data.changes.forEach(c => by[c.choice]++);
+  if (!confirm(`Put your choices into the live article “${rv.data.title}”?\n\n${by.new} correction${by.new === 1 ? "" : "s"} and ${by.custom} edit${by.custom === 1 ? "" : "s"} of your own will be put in; ${by.original} passage${by.original === 1 ? "" : "s"} stay${by.original === 1 ? "s" : ""} as ${by.original === 1 ? "it is" : "they are"}.\n\nThe article then opens in the editor. Nothing changes on the public site until you press Save there.` + (rv.dirty ? "\n\nYour choices will be saved first." : ""))) return;
+  if (rv.dirty && !(await saveChoices())) return;
+  const btn = $("rv-apply"); btn.disabled = true;
+  show("rv-msg", "info", "Loading the live article…");
+  try {
+    const live = await fetchArticle(rv.data.original);
+    const res = applyChoices(live.body, rv.data.changes, false);
+    const i = articles.findIndex(a => a.path === live.path); if (i >= 0) articles[i] = live; else articles.push(live);
+    setDirty(false); openEditor(live);
+    $("f-body").value = spellOut(res.text); setDirty(true);
+    show("ed-msg", res.failed.length ? "bad" : "info", "Your choices are loaded. Read it over, make any further edits of your own, then press Save to make it live." + failedText(res.failed));
+  } catch (e) { show("rv-msg", "bad", explain(e, "loading the live article")); }
+  finally { btn.disabled = false; }
+}
+$("rv-save").onclick = saveChoices;
+$("rv-apply").onclick = applyToLive;
+$("review-btn").onclick = () => { const r = current && reviewFor(current.path); if (r) askLeave(() => openReview(r)); };
+
 /* ---------- wiring ---------- */
 $("make-key").href = KEY_URL;
 $("signin-form").addEventListener("submit", async ev => {
@@ -932,7 +1208,7 @@ $("f-published").addEventListener("change", () => { updateSwitch(); setDirty(tru
 ["f-title", "f-summary", "f-date", "f-time", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
 document.querySelectorAll(".toolbar button[data-fmt]").forEach(b => b.addEventListener("click", () => fmt(b.dataset.fmt)));
 document.addEventListener("keydown", ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s" && !$("v-editor").hidden) { ev.preventDefault(); save(); } });
-window.addEventListener("beforeunload", ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ""; } });
+window.addEventListener("beforeunload", ev => { if (dirty || (rv && rv.dirty)) { ev.preventDefault(); ev.returnValue = ""; } });
 
 (async () => {
   token = loadToken();
