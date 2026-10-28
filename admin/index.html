@@ -97,6 +97,11 @@ textarea { resize: vertical; }
 .items .t { font-family: var(--serif); font-size: 20px; font-weight: 600; line-height: 1.3; min-width: 0; }
 .items .meta { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; grid-column: 1; }
 .items .pill { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.items li.sec { padding: 14px 4px; background: var(--surface); }
+.sec-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
+.sec-head > div:first-child { display: grid; gap: 2px; }
+.sec-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.items li.sec .items { margin-top: 12px; }
 .pill { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; border-radius: 3px; padding: 2px 8px; }
 .pill.pub { background: var(--ok-bg); color: var(--ok); }
 .pill.draft { background: var(--warn-bg); color: var(--warn); }
@@ -449,11 +454,13 @@ function parse(raw) {
   const meta = {};
   head.split("\n").forEach(l => { const k = l.indexOf(":"); if (k > 0) meta[l.slice(0, k).trim().toLowerCase()] = l.slice(k + 1).trim(); });
   return { title: meta.title || "", date: meta.date || "", time: meta.time || "", summary: meta.summary || "",
+           section: meta.section || "", order: meta.order || "",
            published: ["true", "yes", "1"].includes((meta.published || "false").toLowerCase()), body };
 }
 function serialize(a) {
   const one = s => String(s || "").replace(/\s*\n\s*/g, " ").trim();
   return "---\ntitle: " + one(a.title) + "\ndate: " + one(a.date) + (one(a.time) ? "\ntime: " + one(a.time) : "") + (one(a.summary) ? "\nsummary: " + one(a.summary) : "") +
+         (one(a.section) ? "\nsection: " + one(a.section) : "") + (one(a.order) ? "\norder: " + one(a.order) : "") +
          "\npublished: " + (a.published ? "true" : "false") + "\n---\n" + a.body.replace(/\r\n/g, "\n").replace(/\s*$/, "\n");
 }
 function slugOf(name) { return name.replace(/\.md$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "article"; }
@@ -481,6 +488,7 @@ function inline(s) {
   s = s.replace(/\s*\ufdfa/g, ' <span class="hon saw" lang="ar">\ufdfa</span>');
   if ((s.match(AR) || []).length <= s.length * 0.3) s = s.replace(PHRASES, '<span class="hon" lang="ar" dir="rtl">$1</span>');
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, u) => `<a href="${u.replace(/"/g, "&quot;")}" target="_blank" rel="noopener">${t}</a>`);
+  s = s.replace(/\[([^\]]+)\]\(#([a-z0-9-]+)\)/g, '<a href="#$2">$1</a>');   // link to another article of the site
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(?<![*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "<em>$1</em>");
   s = s.replace(/(?<!\w)_(?!\s)(.+?)(?<!\s)_(?!\w)/g, "<em>$1</em>");
@@ -539,7 +547,8 @@ async function loadList() {
       const j = await gh(repoPath(f.path) + "?ref=" + BRANCH);
       return { name: f.name, path: f.path, sha: j.sha, ...parse(b64decode(j.content)) };
     }));
-    articles.sort((a, b) => sortKey(b).localeCompare(sortKey(a)) || a.title.localeCompare(b.title));
+    articles.sort((a, b) => (a.section ? 1 : 0) - (b.section ? 1 : 0) || a.section.localeCompare(b.section) ||
+      (a.section ? (+a.order || 0) - (+b.order || 0) : sortKey(b).localeCompare(sortKey(a))) || a.title.localeCompare(b.title));
     await loadReviews();
     show("list-msg", "", "");
     renderList();
@@ -549,16 +558,50 @@ async function loadList() {
   }
 }
 
-function renderList() {
-  const pub = articles.filter(a => a.published).length;
-  $("counts").textContent = `${pub} published · ${articles.length - pub} hidden draft${articles.length - pub === 1 ? "" : "s"}`;
-  $("items").innerHTML = articles.length ? articles.map((a, i) => `
+let openSection = "";   // the section whose parts are shown in the list
+function itemRow(a, i, mainCount) {
+  const inSec = !!a.section;
+  return `
     <li class="item"><button type="button" class="open" data-i="${i}">
-      <span class="t" dir="auto">${esc(a.title || "(no title)")}</span>
+      <span class="t" dir="auto">${inSec ? esc(a.order) + ". " : ""}${esc(a.title || "(no title)")}</span>
       <span class="meta">${esc(a.date)}${a.time ? " · " + esc(a.time) : ""}${reviews.some(r => r.data.original === a.path) ? " · corrections to review" : ""}</span>
       <span class="pill ${a.published ? "pub" : "draft"}">${isReviewCopy(a.path) ? "Review copy" : a.published ? "Published" : "Hidden draft"}</span>
     </button>
-    <span class="mv"><button type="button" class="mvbtn" data-mv="up" data-i="${i}" aria-label="Move newer: ${esc(a.title)}" ${i === 0 ? "disabled" : ""}>↑ Newer</button><button type="button" class="mvbtn" data-mv="down" data-i="${i}" aria-label="Move older: ${esc(a.title)}" ${i === articles.length - 1 ? "disabled" : ""}>↓ Older</button></span></li>`).join("") : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+    ${inSec ? "<span></span>" : `<span class="mv"><button type="button" class="mvbtn" data-mv="up" data-i="${i}" aria-label="Move newer: ${esc(a.title)}" ${i === 0 ? "disabled" : ""}>↑ Newer</button><button type="button" class="mvbtn" data-mv="down" data-i="${i}" aria-label="Move older: ${esc(a.title)}" ${i === mainCount - 1 ? "disabled" : ""}>↓ Older</button></span>`}</li>`;
+}
+function renderList() {
+  const pub = articles.filter(a => a.published).length;
+  $("counts").textContent = `${pub} published · ${articles.length - pub} hidden draft${articles.length - pub === 1 ? "" : "s"}`;
+  const mainCount = articles.filter(a => !a.section).length;
+  const secs = [...new Set(articles.filter(a => a.section).map(a => a.section))];
+  const secRows = secs.map(name => {
+    const parts = articles.map((a, i) => [a, i]).filter(([a]) => a.section === name), np = parts.filter(([a]) => a.published).length;
+    return `<li class="sec"><div class="sec-head"><div><span class="kicker">Book in parts</span>
+        <span class="t" dir="auto">${esc(name)}</span>
+        <span class="meta">${parts.length} parts · ${np} published · ${parts.length - np} hidden</span></div>
+      <div class="sec-btns"><button type="button" class="mvbtn" data-sec-toggle="${esc(name)}">${openSection === name ? "Hide parts" : "Show parts"}</button>
+        <button type="button" class="mvbtn" data-sec-pub="1" data-sec="${esc(name)}" ${np === parts.length ? "disabled" : ""}>Publish all</button>
+        <button type="button" class="mvbtn" data-sec-pub="0" data-sec="${esc(name)}" ${np === 0 ? "disabled" : ""}>Hide all</button></div></div>
+      ${openSection === name ? `<ul class="items">${parts.map(([a, i]) => itemRow(a, i, mainCount)).join("")}</ul>` : ""}</li>`;
+  }).join("");
+  $("items").innerHTML = articles.length ? secRows + articles.filter(a => !a.section).map((a, i) => itemRow(a, i, mainCount)).join("")
+    : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+}
+
+/* Publish or hide every part of a section, one file at a time (each is its own commit). */
+async function setSection(name, on) {
+  const parts = articles.filter(a => a.section === name && a.published !== on && !isReviewCopy(a.path));
+  for (let k = 0; k < parts.length; k++) {
+    const a = parts[k];
+    show("list-msg", "info", `${on ? "Publishing" : "Hiding"} ${k + 1} of ${parts.length}: ${a.title}`);
+    try {
+      const n = { ...a, published: on };
+      const res = await gh(repoPath(a.path), { method: "PUT", body: JSON.stringify({ message: (on ? "Publish: " : "Hide: ") + a.title.trim(), content: b64encode(serialize(n)), branch: BRANCH, sha: a.sha }) });
+      a.published = on; a.sha = res.content.sha;
+    } catch (e) { show("list-msg", "bad", explain(e, on ? "publishing" : "hiding") + ` (stopped at part ${a.order})`); renderList(); return; }
+  }
+  show("list-msg", "ok", on ? "All parts published. The public site shows them in about a minute." : "All parts hidden.");
+  renderList();
 }
 
 /* Swap the date/time of two neighbours in the list so their order changes. dir "up" = make newer. */
@@ -1450,6 +1493,12 @@ $("signin-form").addEventListener("submit", async ev => {
 $("signout").onclick = () => askLeave(() => signOut());
 $("new-btn").onclick = () => openEditor(null);
 $("items").addEventListener("click", ev => {
+  const t = ev.target.closest("button[data-sec-toggle]");
+  if (t) { openSection = openSection === t.dataset.secToggle ? "" : t.dataset.secToggle; return renderList(); }
+  const sp = ev.target.closest("button[data-sec-pub]");
+  if (sp) { const on = sp.dataset.secPub === "1", name = sp.dataset.sec;
+    if (on && !confirm(`Publish all parts of “${name}” on the public site?`)) return;
+    return setSection(name, on); }
   const m = ev.target.closest("button[data-mv]");
   if (m) return move(+m.dataset.i, m.dataset.mv);
   const b = ev.target.closest("button.open"); if (b) openEditor(articles[+b.dataset.i]);
