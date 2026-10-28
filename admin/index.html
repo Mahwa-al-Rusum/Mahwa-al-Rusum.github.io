@@ -581,11 +581,30 @@ function renderList() {
         <span class="meta">${parts.length} parts · ${np} published · ${parts.length - np} hidden</span></div>
       <div class="sec-btns"><button type="button" class="mvbtn" data-sec-toggle="${esc(name)}">${openSection === name ? "Hide parts" : "Show parts"}</button>
         <button type="button" class="mvbtn" data-sec-pub="1" data-sec="${esc(name)}" ${np === parts.length ? "disabled" : ""}>Publish all</button>
-        <button type="button" class="mvbtn" data-sec-pub="0" data-sec="${esc(name)}" ${np === 0 ? "disabled" : ""}>Hide all</button></div></div>
+        <button type="button" class="mvbtn" data-sec-pub="0" data-sec="${esc(name)}" ${np === 0 ? "disabled" : ""}>Hide all</button>
+        <button type="button" class="mvbtn" data-book-dl="docx" data-sec="${esc(name)}">Word</button>
+        <button type="button" class="mvbtn" data-book-dl="pdf" data-sec="${esc(name)}">PDF</button>
+        <button type="button" class="mvbtn" data-book-dl="md" data-sec="${esc(name)}">Markdown</button></div></div>
       ${openSection === name ? `<ul class="items">${parts.map(([a, i]) => itemRow(a, i, mainCount)).join("")}</ul>` : ""}</li>`;
   }).join("");
   $("items").innerHTML = articles.length ? secRows + articles.filter(a => !a.section).map((a, i) => itemRow(a, i, mainCount)).join("")
     : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+}
+
+/* Download the whole book of a section from the private repo (books/<slug>/), works while the book is hidden. */
+const bookSlug = name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+async function downloadBook(name, ext) {
+  show("list-msg", "info", "Preparing the download…");
+  try {
+    const dir = "books/" + bookSlug(name), files = await gh(repoPath(dir) + "?ref=" + BRANCH);
+    const f = files.find(x => x.name.toLowerCase().endsWith("." + ext));
+    if (!f) { show("list-msg", "bad", `There is no ${ext.toUpperCase()} file of this book in ${dir} yet.`); return; }
+    const r = await fetch(API + repoPath(f.path) + "?ref=" + BRANCH, { cache: "no-store",
+      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28" } });
+    if (!r.ok) { const e = new Error("GitHub " + r.status); e.status = r.status; throw e; }
+    saveBlob(await r.blob(), f.name);
+    show("list-msg", "ok", "Downloaded " + f.name + ".");
+  } catch (e) { show("list-msg", "bad", explain(e, "downloading the book")); }
 }
 
 /* Publish or hide every part of a section, one file at a time (each is its own commit). */
@@ -1495,6 +1514,8 @@ $("new-btn").onclick = () => openEditor(null);
 $("items").addEventListener("click", ev => {
   const t = ev.target.closest("button[data-sec-toggle]");
   if (t) { openSection = openSection === t.dataset.secToggle ? "" : t.dataset.secToggle; return renderList(); }
+  const bd = ev.target.closest("button[data-book-dl]");
+  if (bd) return downloadBook(bd.dataset.sec, bd.dataset.bookDl);
   const sp = ev.target.closest("button[data-sec-pub]");
   if (sp) { const on = sp.dataset.secPub === "1", name = sp.dataset.sec;
     if (on && !confirm(`Publish all parts of “${name}” on the public site?`)) return;
