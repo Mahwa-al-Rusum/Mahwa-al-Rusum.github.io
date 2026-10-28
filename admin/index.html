@@ -98,6 +98,8 @@ textarea { resize: vertical; }
 .items .meta { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; grid-column: 1; }
 .items .pill { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
 .items li.sec { padding: 14px 4px; background: var(--surface); }
+.items li.cathead h2 { font: 600 13px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-muted); margin: 22px 0 6px; }
+.items li.cathead { border-bottom: 0; }
 .sec-head { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; }
 .sec-head > div:first-child { display: grid; gap: 2px; }
 .sec-btns { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -141,6 +143,7 @@ textarea { resize: vertical; }
 .preview .body h2, .preview .body h3, .preview .body h4 { font-family: var(--serif); line-height: 1.3; margin: 28px 0 8px; }
 .preview .body blockquote { margin: 0 0 18px; padding: 12px 16px; background: var(--quote-bg); border-inline-start: 3px solid var(--accent); }
 .preview .body blockquote p { margin: 0; }
+.preview .body .tbl { overflow-x: auto; margin: 0 0 18px; } .preview .body table { border-collapse: collapse; font-size: 15px; } .preview .body th, .preview .body td { border: 1px solid var(--rule); padding: 6px 8px; vertical-align: top; text-align: start; }
 .hon { font-family: var(--arabic); font-size: 1.05em; unicode-bidi: isolate; }
 .hon.saw { font-size: 1.3em; line-height: 1; }
 .preview .body [dir="rtl"] { font-family: var(--arabic); font-size: 20px; line-height: 2; }
@@ -334,6 +337,18 @@ details.vs-more summary { cursor: pointer; color: var(--accent); font-size: 14px
         <label for="f-summary">Summary <span class="hint">(optional, shown in the list)</span></label>
         <input id="f-summary" type="text" dir="auto">
       </div>
+      <div class="field">
+        <label for="f-category">Menu (category) <span class="hint">(Qur'an, History, Biographies, About… or type a new one)</span></label>
+        <input id="f-category" type="text" list="cat-list" dir="auto" autocomplete="off"><datalist id="cat-list"></datalist>
+      </div>
+      <div class="field">
+        <label for="f-section">Section or book <span class="hint">(leave empty for a single article)</span></label>
+        <input id="f-section" type="text" list="sec-list" dir="auto" autocomplete="off"><datalist id="sec-list"></datalist>
+      </div>
+      <div class="field">
+        <label for="f-order">Place in the section <span class="hint">(1, 2, 3…; use ↑ ↓ in the list to move)</span></label>
+        <input id="f-order" type="number" min="0" step="1">
+      </div>
       <label class="switch" for="f-published">
         <input id="f-published" type="checkbox">
         <span class="track" aria-hidden="true"></span>
@@ -454,13 +469,13 @@ function parse(raw) {
   const meta = {};
   head.split("\n").forEach(l => { const k = l.indexOf(":"); if (k > 0) meta[l.slice(0, k).trim().toLowerCase()] = l.slice(k + 1).trim(); });
   return { title: meta.title || "", date: meta.date || "", time: meta.time || "", summary: meta.summary || "",
-           section: meta.section || "", order: meta.order || "",
+           section: meta.section || "", order: meta.order || "", category: meta.category || "",
            published: ["true", "yes", "1"].includes((meta.published || "false").toLowerCase()), body };
 }
 function serialize(a) {
   const one = s => String(s || "").replace(/\s*\n\s*/g, " ").trim();
   return "---\ntitle: " + one(a.title) + "\ndate: " + one(a.date) + (one(a.time) ? "\ntime: " + one(a.time) : "") + (one(a.summary) ? "\nsummary: " + one(a.summary) : "") +
-         (one(a.section) ? "\nsection: " + one(a.section) : "") + (one(a.order) ? "\norder: " + one(a.order) : "") +
+         (one(a.category) ? "\ncategory: " + one(a.category) : "") + (one(a.section) ? "\nsection: " + one(a.section) : "") + (one(a.order) ? "\norder: " + one(a.order) : "") +
          "\npublished: " + (a.published ? "true" : "false") + "\n---\n" + a.body.replace(/\r\n/g, "\n").replace(/\s*$/, "\n");
 }
 function slugOf(name) { return name.replace(/\.md$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "article"; }
@@ -501,8 +516,16 @@ function mdToHtml(text) {
     if (lst) { out.push(`<${lst.tag}>` + lst.items.map(i => `<li${arAttr(i)}>${inline(i)}</li>`).join("") + `</${lst.tag}>`); lst = null; }
     if (quote.length) { const t = quote.join(" "); out.push(`<blockquote${arAttr(t)}><p>${inline(t)}</p></blockquote>`); quote = []; }
   };
-  for (const line of text.split("\n")) {
-    const s = line.trim(); let m;
+  const lines = text.split("\n");
+  for (let k = 0; k < lines.length; k++) {
+    const s = lines[k].trim(); let m;
+    if (s.startsWith("|") && s.endsWith("|")) {          // a Markdown table (same as build.py)
+      flush(); const rows = [s];
+      while (k + 1 < lines.length && lines[k + 1].trim().startsWith("|")) rows.push(lines[++k].trim());
+      const cells = rows.filter(r => !/^\|[\s:|-]+\|$/.test(r)).map(r => r.replace(/^\||\|$/g, "").split("|").map(c => c.trim()));
+      if (cells.length) out.push('<div class="tbl"><table><tr>' + cells[0].map(c => `<th${arAttr(c)}>${inline(c)}</th>`).join("") + "</tr>" + cells.slice(1).map(r => "<tr>" + r.map(c => `<td${arAttr(c)}>${inline(c)}</td>`).join("") + "</tr>").join("") + "</table></div>");
+      continue;
+    }
     if (!s) { flush(); continue; }
     if ((m = s.match(/^(#{1,3})\s+(.*)$/))) { flush(); const l = m[1].length + 1; out.push(`<h${l}${arAttr(m[2])}>${inline(m[2])}</h${l}>`); continue; }
     if (/^(-{3,}|\*{3,})$/.test(s)) { flush(); out.push("<hr>"); continue; }
@@ -550,6 +573,7 @@ async function loadList() {
     articles.sort((a, b) => (a.section ? 1 : 0) - (b.section ? 1 : 0) || a.section.localeCompare(b.section) ||
       (a.section ? (+a.order || 0) - (+b.order || 0) : sortKey(b).localeCompare(sortKey(a))) || a.title.localeCompare(b.title));
     await loadReviews();
+    try { await loadBooks(); } catch (e) { books = []; }
     show("list-msg", "", "");
     renderList();
   } catch (e) {
@@ -559,36 +583,90 @@ async function loadList() {
 }
 
 let openSection = "";   // the section whose parts are shown in the list
-function itemRow(a, i, mainCount) {
-  const inSec = !!a.section;
+let books = [];         // whole books: books/<slug>/ with book.json {title, description, section, published, order}
+const CAT_ORDER = ["Qur'an", "History", "Biographies", "Books", "About"];
+const catRank = c => ((CAT_ORDER.indexOf(c) + 1) || 90) + (c ? 0 : 100);
+function itemRow(a, i, mainCount, secParts) {
+  const inSec = !!a.section, k = secParts ? secParts.findIndex(([x]) => x === a) : -1;
+  const mv = inSec
+    ? `<span class="mv"><button type="button" class="mvbtn" data-smv="up" data-i="${i}" aria-label="Move up: ${esc(a.title)}" ${k <= 0 ? "disabled" : ""}>↑ Up</button><button type="button" class="mvbtn" data-smv="down" data-i="${i}" aria-label="Move down: ${esc(a.title)}" ${k >= secParts.length - 1 ? "disabled" : ""}>↓ Down</button></span>`
+    : `<span class="mv"><button type="button" class="mvbtn" data-mv="up" data-i="${i}" aria-label="Move newer: ${esc(a.title)}" ${i === 0 ? "disabled" : ""}>↑ Newer</button><button type="button" class="mvbtn" data-mv="down" data-i="${i}" aria-label="Move older: ${esc(a.title)}" ${i === mainCount - 1 ? "disabled" : ""}>↓ Older</button></span>`;
   return `
     <li class="item"><button type="button" class="open" data-i="${i}">
       <span class="t" dir="auto">${inSec ? esc(a.order) + ". " : ""}${esc(a.title || "(no title)")}</span>
-      <span class="meta">${esc(a.date)}${a.time ? " · " + esc(a.time) : ""}${reviews.some(r => r.data.original === a.path) ? " · corrections to review" : ""}</span>
+      <span class="meta">${!inSec && a.category ? esc(a.category) + " · " : ""}${esc(a.date)}${a.time ? " · " + esc(a.time) : ""}${reviews.some(r => r.data.original === a.path) ? " · corrections to review" : ""}</span>
       <span class="pill ${a.published ? "pub" : "draft"}">${isReviewCopy(a.path) ? "Review copy" : a.published ? "Published" : "Hidden draft"}</span>
-    </button>
-    ${inSec ? "<span></span>" : `<span class="mv"><button type="button" class="mvbtn" data-mv="up" data-i="${i}" aria-label="Move newer: ${esc(a.title)}" ${i === 0 ? "disabled" : ""}>↑ Newer</button><button type="button" class="mvbtn" data-mv="down" data-i="${i}" aria-label="Move older: ${esc(a.title)}" ${i === mainCount - 1 ? "disabled" : ""}>↓ Older</button></span>`}</li>`;
+    </button>${mv}</li>`;
 }
 function renderList() {
   const pub = articles.filter(a => a.published).length;
   $("counts").textContent = `${pub} published · ${articles.length - pub} hidden draft${articles.length - pub === 1 ? "" : "s"}`;
   const mainCount = articles.filter(a => !a.section).length;
   const secs = [...new Set(articles.filter(a => a.section).map(a => a.section))];
-  const secRows = secs.map(name => {
+  const catOfSec = name => (articles.find(a => a.section === name && a.category) || {}).category || "";
+  const secRow = name => {
     const parts = articles.map((a, i) => [a, i]).filter(([a]) => a.section === name), np = parts.filter(([a]) => a.published).length;
-    return `<li class="sec"><div class="sec-head"><div><span class="kicker">Book in parts</span>
+    const hasBook = books.some(b => b.section === name || b.slug === bookSlug(name));
+    return `<li class="sec"><div class="sec-head"><div><span class="kicker">Book or series in parts</span>
         <span class="t" dir="auto">${esc(name)}</span>
         <span class="meta">${parts.length} parts · ${np} published · ${parts.length - np} hidden</span></div>
       <div class="sec-btns"><button type="button" class="mvbtn" data-sec-toggle="${esc(name)}">${openSection === name ? "Hide parts" : "Show parts"}</button>
         <button type="button" class="mvbtn" data-sec-pub="1" data-sec="${esc(name)}" ${np === parts.length ? "disabled" : ""}>Publish all</button>
         <button type="button" class="mvbtn" data-sec-pub="0" data-sec="${esc(name)}" ${np === 0 ? "disabled" : ""}>Hide all</button>
-        <button type="button" class="mvbtn" data-book-dl="docx" data-sec="${esc(name)}">Word</button>
+        ${hasBook ? `<button type="button" class="mvbtn" data-book-dl="docx" data-sec="${esc(name)}">Word</button>
         <button type="button" class="mvbtn" data-book-dl="pdf" data-sec="${esc(name)}">PDF</button>
-        <button type="button" class="mvbtn" data-book-dl="md" data-sec="${esc(name)}">Markdown</button></div></div>
-      ${openSection === name ? `<ul class="items">${parts.map(([a, i]) => itemRow(a, i, mainCount)).join("")}</ul>` : ""}</li>`;
-  }).join("");
-  $("items").innerHTML = articles.length ? secRows + articles.filter(a => !a.section).map((a, i) => itemRow(a, i, mainCount)).join("")
-    : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+        <button type="button" class="mvbtn" data-book-dl="md" data-sec="${esc(name)}">Markdown</button>` : ""}</div></div>
+      ${openSection === name ? `<ul class="items">${parts.map(([a, i]) => itemRow(a, i, mainCount, parts)).join("")}</ul>` : ""}</li>`;
+  };
+  const cats = [...new Set(secs.map(catOfSec))].sort((a, b) => catRank(a) - catRank(b));
+  let html = cats.map(c => `<li class="cathead"><h2>${esc(c || "No menu chosen")}</h2></li>` + secs.filter(n => catOfSec(n) === c).map(secRow).join("")).join("");
+  const solo = books.filter(b => !b.section);
+  if (solo.length) html += `<li class="cathead"><h2>Whole books (downloads only)</h2></li>` + solo.map(b => `<li class="sec"><div class="sec-head"><div>
+      <span class="t" dir="auto">${esc(b.title)}</span><span class="meta">${b.published ? "Shown on the site" : "Hidden"} · ${esc(b.files.join(", "))}</span></div>
+      <div class="sec-btns"><button type="button" class="mvbtn" data-book-pub="${b.published ? 0 : 1}" data-slug="${esc(b.slug)}">${b.published ? "Hide" : "Publish"}</button>
+      ${b.files.map(f => `<button type="button" class="mvbtn" data-book-file="${esc(f)}" data-slug="${esc(b.slug)}">${esc(f.split(".").pop().toUpperCase())}</button>`).join("")}</div></div></li>`).join("");
+  html += `<li class="cathead"><h2>Single articles</h2></li>` + (mainCount ? articles.filter(a => !a.section).map((a, i) => itemRow(a, i, mainCount)).join("") : `<li class="empty">No single articles.</li>`);
+  $("items").innerHTML = articles.length ? html : `<li class="empty">No articles yet. Click New article to write the first one.</li>`;
+}
+
+/* Move a part up or down inside its section: swap its order with the neighbour's and save both. */
+async function moveInSection(i, dir) {
+  const a = articles[i], parts = articles.filter(x => x.section === a.section).sort((x, y) => (+x.order || 0) - (+y.order || 0));
+  const k = parts.indexOf(a), b = parts[dir === "up" ? k - 1 : k + 1]; if (!b) return;
+  let oa = +a.order || 0, ob = +b.order || 0; if (oa === ob) ob = oa + (dir === "up" ? -1 : 1);
+  show("list-msg", "info", "Changing the order…");
+  try {
+    for (const [x, o] of [[a, ob], [b, oa]]) {
+      const n = { ...x, order: String(o) };
+      const res = await gh(repoPath(x.path), { method: "PUT", body: JSON.stringify({ message: "Order in section: " + x.title.trim(), content: b64encode(serialize(n)), branch: BRANCH, sha: x.sha }) });
+      Object.assign(x, { order: String(o), sha: res.content.sha });
+    }
+    articles.sort((x, y) => (x.section ? 1 : 0) - (y.section ? 1 : 0) || x.section.localeCompare(y.section) || (x.section ? (+x.order || 0) - (+y.order || 0) : sortKey(y).localeCompare(sortKey(x))) || x.title.localeCompare(y.title));
+    show("list-msg", "ok", "Order changed."); renderList();
+  } catch (e) { show("list-msg", "bad", explain(e, "changing the order")); await loadList(); }
+}
+
+/* Whole books (books/<slug>/): list them, and publish or hide a standalone one (its book.json "published"). */
+async function loadBooks() {
+  books = [];
+  let dirs = []; try { dirs = (await gh(repoPath("books") + "?ref=" + BRANCH)).filter(d => d.type === "dir"); } catch (e) { if (e.status !== 404) throw e; }
+  for (const d of dirs) {
+    const files = await gh(repoPath(d.path) + "?ref=" + BRANCH); let info = {}, sha = "";
+    const j = files.find(f => f.name === "book.json");
+    if (j) { const r = await gh(repoPath(j.path) + "?ref=" + BRANCH); info = JSON.parse(b64decode(r.content)); sha = r.sha; }
+    books.push({ slug: d.name, title: info.title || d.name, section: info.section || "", published: !!info.published, info, sha,
+                 files: files.filter(f => /\.(docx|pdf|md)$/.test(f.name)).map(f => f.name) });
+  }
+}
+async function setBookPublished(slug, on) {
+  const b = books.find(x => x.slug === slug); if (!b) return;
+  if (on && !confirm(`Show “${b.title}” and its downloads on the public site?`)) return;
+  try {
+    const info = { ...b.info, published: on };
+    const res = await gh(repoPath(`books/${slug}/book.json`), { method: "PUT", body: JSON.stringify({ message: (on ? "Publish book: " : "Hide book: ") + b.title, content: b64encode(JSON.stringify(info, null, 1) + "\n"), branch: BRANCH, ...(b.sha ? { sha: b.sha } : {}) }) });
+    Object.assign(b, { published: on, info, sha: res.content.sha });
+    show("list-msg", "ok", on ? "Published. The site shows it in about a minute." : "Hidden."); renderList();
+  } catch (e) { show("list-msg", "bad", explain(e, "changing the book")); }
 }
 
 /* Download the whole book of a section from the private repo (books/<slug>/), works while the book is hidden. */
@@ -596,7 +674,8 @@ const bookSlug = name => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u
 async function downloadBook(name, ext) {
   show("list-msg", "info", "Preparing the download…");
   try {
-    const dir = "books/" + bookSlug(name), files = await gh(repoPath(dir) + "?ref=" + BRANCH);
+    const bk = books.find(b => b.section === name) || { slug: bookSlug(name) };
+    const dir = "books/" + bk.slug, files = await gh(repoPath(dir) + "?ref=" + BRANCH);
     const f = files.find(x => x.name.toLowerCase().endsWith("." + ext));
     if (!f) { show("list-msg", "bad", `There is no ${ext.toUpperCase()} file of this book in ${dir} yet.`); return; }
     const r = await fetch(API + repoPath(f.path) + "?ref=" + BRANCH, { cache: "no-store",
@@ -605,6 +684,15 @@ async function downloadBook(name, ext) {
     saveBlob(await r.blob(), f.name);
     show("list-msg", "ok", "Downloaded " + f.name + ".");
   } catch (e) { show("list-msg", "bad", explain(e, "downloading the book")); }
+}
+
+async function downloadFile(path) {
+  show("list-msg", "info", "Preparing the download…");
+  try {
+    const r = await fetch(API + repoPath(path) + "?ref=" + BRANCH, { cache: "no-store", headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github.raw", "X-GitHub-Api-Version": "2022-11-28" } });
+    if (!r.ok) { const e = new Error("GitHub " + r.status); e.status = r.status; throw e; }
+    saveBlob(await r.blob(), path.split("/").pop()); show("list-msg", "ok", "Downloaded " + path.split("/").pop() + ".");
+  } catch (e) { show("list-msg", "bad", explain(e, "downloading")); }
 }
 
 /* Publish or hide every part of a section, one file at a time (each is its own commit). */
@@ -649,9 +737,12 @@ async function move(i, dir) {
 }
 
 function openEditor(a) {
-  current = a ? { ...a } : { name: "", path: "", sha: "", title: "", date: today(), time: "", summary: "", published: false, body: "" };
+  current = a ? { ...a } : { name: "", path: "", sha: "", title: "", date: today(), time: "", summary: "", category: "", section: "", order: "", published: false, body: "" };
   $("f-title").value = spellOut(current.title);
   $("f-summary").value = spellOut(current.summary);
+  $("f-category").value = current.category || ""; $("f-section").value = current.section || ""; $("f-order").value = current.order || "";
+  $("cat-list").innerHTML = [...new Set(["Qur'an", "History", "Biographies", "About", ...articles.map(x => x.category).filter(Boolean)])].map(c => `<option value="${esc(c)}">`).join("");
+  $("sec-list").innerHTML = [...new Set(articles.map(x => x.section).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join("");
   $("f-date").value = current.date;
   $("f-time").value = current.time || "";
   $("f-published").checked = current.published;
@@ -703,6 +794,7 @@ async function save() {
   if (!$("f-title").value.trim()) { show("ed-msg", "bad", "Give the article a title before saving."); $("f-title").focus(); return; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test($("f-date").value)) { show("ed-msg", "bad", "Choose a date before saving."); $("f-date").focus(); return; }
   const a = { ...current, title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value, time: $("f-time").value,
+              category: $("f-category").value.trim(), section: $("f-section").value.trim(), order: $("f-order").value.trim(),
               published: $("f-published").checked, body: $("f-body").value };
   if (a.published && isReviewCopy(a.path)) { show("ed-msg", "bad", "This is a review copy. It must stay a hidden draft: switch Published off. To change the live article, use Review the corrections, then Apply."); return; }
   const isNew = !a.path;
@@ -880,9 +972,11 @@ function renderSplit() {
   $("cuts").innerHTML = blocks.map((b, i) => (i > 0 ? `<li><button type="button" class="cut" data-i="${i}" aria-pressed="${cutAt.has(i)}">${cutAt.has(i) ? "✂ New article starts here (tap to undo)" : "✂ Cut here"}</button></li>` : "") + `<li class="blk" dir="auto">${blockLabel(b)}</li>`).join("");
   const ps = pieces();
   $("pieces").innerHTML = ps.map((p, i) => {
-    const t = (i === 0 ? ((PART_RE.exec($("f-title").value) || [])[3] || "") : pieceTitle(p));
+    const secMode = current && current.section && !PART_RE.exec($("f-title").value.trim());
+    const base = $("f-title").value.trim().replace(/\s*\(\d+ of \d+\)\s*$/, "");
+    const t = secMode ? `${base} (${i + 1} of ${ps.length})` : (i === 0 ? ((PART_RE.exec($("f-title").value) || [])[3] || "") : pieceTitle(p));
     return `<div class="piece"><span class="hint">Piece ${i + 1} of ${ps.length}${i === 0 ? " (stays in this article)" : " (new hidden draft)"} · ${p.length} paragraph${p.length === 1 ? "" : "s"}</span>
-      <label class="label" for="pt-${i}">Name for the part</label><input id="pt-${i}" class="ptitle" data-i="${i}" type="text" dir="auto" value="${esc(t)}"></div>`;
+      <label class="label" for="pt-${i}">${(current && current.section && !PART_RE.exec($("f-title").value.trim())) ? "Title of this part" : "Name for the part"}</label><input id="pt-${i}" class="ptitle" data-i="${i}" type="text" dir="auto" value="${esc(t)}"></div>`;
   }).join("");
 }
 function partTitle(prefix, n, sub) { return `${prefix} (Part ${n}${sub ? ": " + sub : ""})`; }
@@ -894,7 +988,11 @@ async function doSplit() {
   const cur = current, m = PART_RE.exec($("f-title").value.trim());
   const prefix = m ? m[1].trim() : $("f-title").value.trim(), n0 = m ? +m[2] : 1;
   const later = m ? articles.filter(a => a.path !== cur.path && (PART_RE.exec(a.title) || [])[1] && PART_RE.exec(a.title)[1].trim() === prefix && +PART_RE.exec(a.title)[2] > n0).sort((a, b) => +PART_RE.exec(b.title)[2] - +PART_RE.exec(a.title)[2]) : [];
-  if (!confirm(`This makes ${k - 1} new hidden draft${k > 2 ? "s" : ""} and renumbers ${later.length} later part${later.length === 1 ? "" : "s"}. Continue?`)) return;
+  // in a section (book or series in parts) the new pieces follow this part and every later part moves down k-1 places
+  const sec = cur.section || "", o0 = +cur.order || 0;
+  const laterInSec = sec ? articles.filter(a => a.path !== cur.path && a.section === sec && (+a.order || 0) > o0 && !later.includes(a)) : [];
+  const secMode = sec && !m;
+  if (!confirm(`This makes ${k - 1} new hidden draft${k > 2 ? "s" : ""}${later.length ? ` and renumbers ${later.length} later part${later.length === 1 ? "" : "s"}` : ""}${sec ? ` and moves ${later.length + laterInSec.length} later part${later.length + laterInSec.length === 1 ? "" : "s"} of “${sec}” down` : ""}. Continue?`)) return;
   $("split-go").disabled = true;
   const base = { date: $("f-date").value, time: $("f-time").value || "12:00" };
   const put = async (a, msg) => {
@@ -905,20 +1003,25 @@ async function doSplit() {
     // 1. new pieces (pieces 2..k) as hidden drafts
     for (let i = 1; i < k; i++) {
       show("split-msg", "info", `Saving new article ${i} of ${k - 1}…`);
-      const t = addMinutes(base.date, base.time, i), title = partTitle(prefix, n0 + i, names[i]);
-      const a = { name: newFileName(title, t.date), title, date: t.date, time: t.time, summary: "", published: false, body: ps[i].join("\n\n") };
+      const t = addMinutes(base.date, base.time, i), title = secMode ? (names[i] || `${cur.title} (${i + 1} of ${k})`) : partTitle(prefix, n0 + i, names[i]);
+      const a = { name: newFileName(title, t.date), title, date: t.date, time: t.time, summary: "", published: false, body: ps[i].join("\n\n"),
+                  category: cur.category || "", section: sec, order: sec ? String(o0 + i) : "" };
       a.path = DIR + "/" + a.name; await put(a, "Add: " + title + " (draft, split)"); articles.unshift(a);
     }
     // 2. later parts of the series, highest first: renumber and move k-1 minutes later
     for (const a of later) {
       const pm = PART_RE.exec(a.title), t = addMinutes(a.date, a.time || "12:00", k - 1);
       show("split-msg", "info", "Renumbering: " + a.title.slice(-40) + "…");
-      Object.assign(a, { title: partTitle(pm[1].trim(), +pm[2] + k - 1, pm[3]), date: t.date, time: t.time });
+      Object.assign(a, { title: partTitle(pm[1].trim(), +pm[2] + k - 1, pm[3]), date: t.date, time: t.time, ...(sec && a.section === sec ? { order: String((+a.order || 0) + k - 1) } : {}) });
       await put(a, "Renumber: " + a.title);
+    }
+    for (const a of laterInSec.sort((x, y) => (+y.order || 0) - (+x.order || 0))) {
+      show("split-msg", "info", "Moving down: " + a.title.slice(0, 50) + "…");
+      a.order = String((+a.order || 0) + k - 1); await put(a, "Order in section: " + a.title);
     }
     // 3. this article keeps the first piece
     show("split-msg", "info", "Saving the first piece…");
-    const first = { ...cur, title: m ? partTitle(prefix, n0, names[0]) : $("f-title").value.trim(), summary: $("f-summary").value, date: base.date, time: $("f-time").value, published: $("f-published").checked, body: ps[0].join("\n\n") };
+    const first = { ...cur, title: m ? partTitle(prefix, n0, names[0]) : secMode ? (names[0] || $("f-title").value.trim()) : $("f-title").value.trim(), category: $("f-category").value.trim(), section: $("f-section").value.trim(), order: $("f-order").value.trim(), summary: $("f-summary").value, date: base.date, time: $("f-time").value, published: $("f-published").checked, body: ps[0].join("\n\n") };
     const saved = await put(first, "Split: " + first.title);
     const i = articles.findIndex(x => x.path === saved.path); if (i >= 0) articles[i] = saved; else articles.unshift(saved);
     setDirty(false); await loadList();
@@ -994,7 +1097,7 @@ ${sty("IntenseQuote", "Intense Quote", '<w:ind w:left="567" w:right="567"/>', "<
 }
 function saveBlob(blob, name) { const u = URL.createObjectURL(blob), a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
 function dlName(ext) { return (current && current.name ? current.name.replace(/\.md$/, "") : slugOf($("f-title").value || "article")) + ext; }
-function formState() { return { title: $("f-title").value, summary: $("f-summary").value, date: $("f-date").value, time: $("f-time").value, published: $("f-published").checked, body: $("f-body").value }; }
+function formState() { return { title: $("f-title").value, summary: $("f-summary").value, category: $("f-category").value, section: $("f-section").value, order: $("f-order").value, date: $("f-date").value, time: $("f-time").value, published: $("f-published").checked, body: $("f-body").value }; }
 $("dl-md").onclick = () => saveBlob(new Blob([serialize(formState())], { type: "text/markdown;charset=utf-8" }), dlName(".md"));
 $("dl-docx").onclick = () => { const f = formState(); saveBlob(mdToDocx(f.title, f.body), dlName(".docx")); };
 $("upd-btn").onclick = () => $("upd-file").click();
@@ -1514,6 +1617,12 @@ $("new-btn").onclick = () => openEditor(null);
 $("items").addEventListener("click", ev => {
   const t = ev.target.closest("button[data-sec-toggle]");
   if (t) { openSection = openSection === t.dataset.secToggle ? "" : t.dataset.secToggle; return renderList(); }
+  const sm = ev.target.closest("button[data-smv]");
+  if (sm) return moveInSection(+sm.dataset.i, sm.dataset.smv);
+  const bp = ev.target.closest("button[data-book-pub]");
+  if (bp) return setBookPublished(bp.dataset.slug, bp.dataset.bookPub === "1");
+  const bf = ev.target.closest("button[data-book-file]");
+  if (bf) return downloadFile(`books/${bf.dataset.slug}/${bf.dataset.bookFile}`);
   const bd = ev.target.closest("button[data-book-dl]");
   if (bd) return downloadBook(bd.dataset.sec, bd.dataset.bookDl);
   const sp = ev.target.closest("button[data-sec-pub]");
@@ -1530,7 +1639,7 @@ $("del-btn").onclick = askDelete;
 $("tab-write").onclick = () => setTab("write");
 $("tab-preview").onclick = () => setTab("preview");
 $("f-published").addEventListener("change", () => { updateSwitch(); setDirty(true); });
-["f-title", "f-summary", "f-date", "f-time", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
+["f-title", "f-summary", "f-category", "f-section", "f-order", "f-date", "f-time", "f-body"].forEach(id => $(id).addEventListener("input", () => setDirty(true)));
 document.querySelectorAll(".toolbar button[data-fmt]").forEach(b => b.addEventListener("click", () => fmt(b.dataset.fmt)));
 document.addEventListener("keydown", ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "s" && !$("v-editor").hidden) { ev.preventDefault(); save(); } });
 window.addEventListener("beforeunload", ev => { if (dirty || (rv && rv.dirty)) { ev.preventDefault(); ev.returnValue = ""; } });
